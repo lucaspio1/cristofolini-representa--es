@@ -1,40 +1,41 @@
 import { Request, Response } from 'express';
-import db from '../database/db';
+import pool from '../database/db';
 
-export const getProductLines = (req: Request, res: Response) => {
+export const getProductLines = async (req: Request, res: Response) => {
   try {
-    const items = db.prepare('SELECT * FROM product_lines ORDER BY name ASC').all();
-    res.json(items);
+    const [rows] = await pool.query('SELECT * FROM product_lines ORDER BY name ASC');
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch product lines' });
   }
 };
 
-export const createProductLine = (req: Request, res: Response) => {
+export const createProductLine = async (req: Request, res: Response) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
   try {
-    const info = db.prepare('INSERT INTO product_lines (name) VALUES (?)').run(name);
-    res.json({ id: info.lastInsertRowid, name });
+    const [result]: any = await pool.query('INSERT INTO product_lines (name) VALUES (?)', [name]);
+    const [newLine] = await pool.query('SELECT * FROM product_lines WHERE id = ?', [result.insertId]);
+    res.json((newLine as any)[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save product line' });
+    res.status(500).json({ error: 'Failed to create product line' });
   }
 };
 
-export const updateProductLine = (req: Request, res: Response) => {
+export const updateProductLine = async (req: Request, res: Response) => {
   const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name is required' });
   try {
-    db.prepare('UPDATE product_lines SET name = ? WHERE id = ?').run(name, req.params.id);
-    res.json({ id: parseInt(req.params.id), name });
+    await pool.query('UPDATE product_lines SET name = ? WHERE id = ?', [name, req.params.id]);
+    const [updated] = await pool.query('SELECT * FROM product_lines WHERE id = ?', [req.params.id]);
+    res.json((updated as any)[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update product line' });
   }
 };
 
-export const deleteProductLine = (req: Request, res: Response) => {
+export const deleteProductLine = async (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM product_lines WHERE id = ?').run(req.params.id);
+    await pool.query('DELETE FROM product_lines WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete product line' });

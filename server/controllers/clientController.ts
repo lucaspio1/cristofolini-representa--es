@@ -1,88 +1,95 @@
 import { Request, Response } from 'express';
-import db from '../database/db';
+import pool from '../database/db';
 
-// --- CRUD DE CLIENTES ---
-export const getClients = (req: Request, res: Response) => {
+export const getClients = async (req: Request, res: Response) => {
   try {
-    const items = db.prepare('SELECT * FROM clients ORDER BY name ASC').all();
-    res.json(items);
+    const [rows] = await pool.query('SELECT * FROM clients ORDER BY name ASC');
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch clients' });
   }
 };
 
-export const createClient = (req: Request, res: Response) => {
+export const createClient = async (req: Request, res: Response) => {
   const { name, cnpj, endereco, responsavel, telefone, email } = req.body;
-  if (!name || !cnpj || !endereco || !responsavel || !telefone || !email) {
-    return res.status(400).json({ error: 'All client fields are required' });
-  }
+  if (!name) return res.status(400).json({ error: 'Name is required' });
   try {
-    const info = db.prepare(`INSERT INTO clients (name, cnpj, endereco, responsavel, telefone, email) VALUES (?, ?, ?, ?, ?, ?)`).run(name, cnpj, endereco, responsavel, telefone, email);
-    res.json({ id: info.lastInsertRowid, name, cnpj, endereco, responsavel, telefone, email });
+    const [result]: any = await pool.query(
+      'INSERT INTO clients (name, cnpj, endereco, responsavel, telefone, email) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, cnpj, endereco, responsavel, telefone, email]
+    );
+    const [newClient] = await pool.query('SELECT * FROM clients WHERE id = ?', [result.insertId]);
+    res.json((newClient as any)[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save client' });
+    res.status(500).json({ error: 'Failed to create client' });
   }
 };
 
-export const updateClient = (req: Request, res: Response) => {
+export const updateClient = async (req: Request, res: Response) => {
   const { name, cnpj, endereco, responsavel, telefone, email } = req.body;
-  if (!name || !cnpj || !endereco || !responsavel || !telefone || !email) {
-    return res.status(400).json({ error: 'All client fields are required' });
-  }
   try {
-    db.prepare(`UPDATE clients SET name = ?, cnpj = ?, endereco = ?, responsavel = ?, telefone = ?, email = ? WHERE id = ?`).run(name, cnpj, endereco, responsavel, telefone, email, req.params.id);
-    res.json({ id: parseInt(req.params.id), name, cnpj, endereco, responsavel, telefone, email });
+    await pool.query(
+      'UPDATE clients SET name = ?, cnpj = ?, endereco = ?, responsavel = ?, telefone = ?, email = ? WHERE id = ?',
+      [name, cnpj, endereco, responsavel, telefone, email, req.params.id]
+    );
+    const [updated] = await pool.query('SELECT * FROM clients WHERE id = ?', [req.params.id]);
+    res.json((updated as any)[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update client' });
   }
 };
 
-export const deleteClient = (req: Request, res: Response) => {
+export const deleteClient = async (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM clients WHERE id = ?').run(req.params.id);
+    await pool.query('DELETE FROM clients WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete client' });
   }
 };
 
-// --- CRUD DE PRODUTOS DO CLIENTE ---
-export const getClientProducts = (req: Request, res: Response) => {
+export const getClientProducts = async (req: Request, res: Response) => {
   try {
-    const products = db.prepare('SELECT * FROM client_products WHERE client_id = ? ORDER BY product_name ASC').all(req.params.id);
-    res.json(products);
+    const [rows] = await pool.query('SELECT * FROM client_products WHERE client_id = ?', [req.params.id]);
+    res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch client products' });
+    res.status(500).json({ error: 'Failed to fetch products' });
   }
 };
 
-export const createClientProduct = (req: Request, res: Response) => {
+export const createClientProduct = async (req: Request, res: Response) => {
   const { product_name, image_url } = req.body;
-  if (!product_name) return res.status(400).json({ error: 'Product name is required' });
   try {
-    const info = db.prepare('INSERT INTO client_products (client_id, product_name, image_url) VALUES (?, ?, ?)').run(req.params.id, product_name, image_url || null);
-    res.json({ id: info.lastInsertRowid, client_id: parseInt(req.params.id), product_name, image_url });
+    const [result]: any = await pool.query(
+      'INSERT INTO client_products (client_id, product_name, image_url) VALUES (?, ?, ?)',
+      [req.params.id, product_name, image_url]
+    );
+    const [newProduct] = await pool.query('SELECT * FROM client_products WHERE id = ?', [result.insertId]);
+    res.json((newProduct as any)[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save client product' });
+    res.status(500).json({ error: 'Failed to add product' });
   }
 };
 
-export const updateClientProduct = (req: Request, res: Response) => {
+export const updateClientProduct = async (req: Request, res: Response) => {
   const { product_name, image_url } = req.body;
-  if (!product_name) return res.status(400).json({ error: 'Product name is required' });
   try {
-    db.prepare('UPDATE client_products SET product_name = ?, image_url = ? WHERE id = ?').run(product_name, image_url || null, req.params.id);
-    res.json({ id: parseInt(req.params.id), product_name, image_url });
+    await pool.query(
+      'UPDATE client_products SET product_name = ?, image_url = ? WHERE id = ?',
+      [product_name, image_url, req.params.id]
+    );
+    const [updated] = await pool.query('SELECT * FROM client_products WHERE id = ?', [req.params.id]);
+    res.json((updated as any)[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update client product' });
+    res.status(500).json({ error: 'Failed to update product' });
   }
 };
 
-export const deleteClientProduct = (req: Request, res: Response) => {
+export const deleteClientProduct = async (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM client_products WHERE id = ?').run(req.params.id);
+    await pool.query('DELETE FROM client_products WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete client product' });
+    res.status(500).json({ error: 'Failed to delete product' });
   }
 };

@@ -1,100 +1,108 @@
-import Database from 'better-sqlite3';
-import bcrypt from 'bcryptjs';
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 
-const db = new Database('sales.db');
+// Carrega as variáveis do arquivo .env
+dotenv.config();
 
-// Inicialização das tabelas
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    name TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    cnpj TEXT,
-    endereco TEXT,
-    responsavel TEXT,
-    telefone TEXT,
-    email TEXT
-  );
-  CREATE TABLE IF NOT EXISTS product_lines (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
-  );
-  CREATE TABLE IF NOT EXISTS client_products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
-    product_name TEXT NOT NULL,
-    image_url TEXT,
-    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
-  );
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cliente TEXT,
-    cotacao TEXT,
-    op_producao TEXT,
-    data_emissao_pedido TEXT,
-    op_referencia TEXT,
-    produto TEXT NOT NULL,
-    peso_solicitado REAL,
-    qtd_sacos_solicitado INTEGER,
-    linha_produto TEXT,
-    data_finalizacao_produto TEXT,
-    data_entrega_cliente TEXT,
-    ordem_compra TEXT,
-    comissao_percentage REAL NOT NULL,
-    numero_nf TEXT,
-    peso_finalizado REAL,
-    qtd_sacos_finalizado INTEGER,
-    data_faturamento TEXT,
-    valor_total_nf REAL NOT NULL,
-    fator_kilo REAL,
-    commission_value REAL NOT NULL,
-    payment_method TEXT DEFAULT 'À VISTA',
-    sale_date DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS installments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id INTEGER NOT NULL,
-    installment_number INTEGER NOT NULL,
-    due_date TEXT NOT NULL,
-    value REAL NOT NULL,
-    payment_date TEXT,
-    FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
-  );
-`);
+// Cria o Pool de Conexões (Padrão Corporativo para alta performance)
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'cristofolini_db',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-// Verificações e atualizações de colunas existentes
-const tableInfo = db.prepare("PRAGMA table_info(client_products)").all() as any[];
-const hasImageUrl = tableInfo.some(col => col.name === 'image_url');
+// Script de Inicialização (Garante que as tabelas existem)
+export const initDB = async () => {
+  try {
+    const connection = await pool.getConnection();
+    
+    // 1. Tabela de Clientes
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        cnpj VARCHAR(20),
+        endereco TEXT,
+        responsavel VARCHAR(255),
+        telefone VARCHAR(20),
+        email VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-const salesTableInfo = db.prepare("PRAGMA table_info(sales)").all() as any[];
-const hasPaymentMethod = salesTableInfo.some(col => col.name === 'payment_method');
-if (!hasPaymentMethod) {
-  db.exec("ALTER TABLE sales ADD COLUMN payment_method TEXT DEFAULT 'À VISTA'");
-}
+    // 2. Tabela de Produtos do Cliente
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS client_products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        client_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        image_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+      )
+    `);
 
-const clientsTableInfo = db.prepare("PRAGMA table_info(clients)").all() as any[];
-const hasCnpj = clientsTableInfo.some(col => col.name === 'cnpj');
-if (!hasCnpj) {
-  try { db.exec("ALTER TABLE clients ADD COLUMN cnpj TEXT"); } catch(e) {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN endereco TEXT"); } catch(e) {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN responsavel TEXT"); } catch(e) {}
-  try { db.exec("ALTER TABLE clients ADD COLUMN telefone TEXT"); } catch(e) {}
-}
-const hasEmail = clientsTableInfo.some(col => col.name === 'email');
-if (!hasEmail) {
-  try { db.exec("ALTER TABLE clients ADD COLUMN email TEXT"); } catch(e) {}
-}
+    // 3. Tabela de Linhas de Produto
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS product_lines (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-// Criação do usuário padrão
-const userCount = db.prepare('SELECT count(*) as count FROM users').get() as { count: number };
-if (userCount.count === 0) {
-  const hashedPassword = bcrypt.hashSync('admin', 10);
-  db.prepare('INSERT INTO users (username, password, name) VALUES (?, ?, ?)').run('admin', hashedPassword, 'Administrador');
-}
+    // 4. Tabela de Vendas
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS sales (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        cliente VARCHAR(255) NOT NULL,
+        cotacao VARCHAR(255),
+        op_producao VARCHAR(255),
+        data_emissao_pedido DATE,
+        op_referencia VARCHAR(255),
+        produto VARCHAR(255) NOT NULL,
+        peso_solicitado DECIMAL(10,2),
+        qtd_sacos_solicitado INT,
+        linha_produto VARCHAR(255),
+        data_finalizacao_produto DATE,
+        data_entrega_cliente DATE,
+        ordem_compra VARCHAR(255),
+        comissao_percentage DECIMAL(5,2),
+        numero_nf VARCHAR(255),
+        peso_finalizado DECIMAL(10,2),
+        qtd_sacos_finalizado INT,
+        data_faturamento DATE,
+        valor_total_nf DECIMAL(10,2),
+        fator_kilo DECIMAL(10,2),
+        commission_value DECIMAL(10,2),
+        payment_method VARCHAR(50) DEFAULT 'À VISTA',
+        sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-export default db;
+    // 5. Tabela de Parcelas (Installments)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS installments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sale_id INT NOT NULL,
+        installment_number INT NOT NULL,
+        due_date DATE NOT NULL,
+        value DECIMAL(10,2) NOT NULL,
+        payment_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('✅ Conexão com MySQL estabelecida com sucesso!');
+    connection.release();
+  } catch (error) {
+    console.error('❌ FATAL: Erro ao conectar ou criar tabelas no MySQL:', error);
+  }
+};
+
+export default pool;

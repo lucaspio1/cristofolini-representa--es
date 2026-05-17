@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Settings, Plus, Edit2, Trash2, Users, Layers, Search, 
-  Check, X, Package, ShoppingBag, ChevronRight, ZoomIn 
+  Check, X, Package, ShoppingBag, ZoomIn 
 } from 'lucide-react';
 import { Entity, ClientProduct } from '../types';
 
@@ -14,6 +14,14 @@ interface RegistrationsProps {
 }
 
 export const Registrations: React.FC<RegistrationsProps> = ({ clients, setClients, productLines, setProductLines }) => {
+  // Controle de Visão da Tabela Principal
+  const [viewMode, setViewMode] = useState<'clients' | 'product-lines'>('clients');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Controle do Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Estados do Formulário
   const [regName, setRegName] = useState('');
   const [regCnpj, setRegCnpj] = useState('');
   const [regEndereco, setRegEndereco] = useState('');
@@ -22,37 +30,45 @@ export const Registrations: React.FC<RegistrationsProps> = ({ clients, setClient
   const [regEmail, setRegEmail] = useState('');
   const [regType, setRegType] = useState<'clients' | 'product-lines'>('clients');
   const [selectedClient, setSelectedClient] = useState<Entity | null>(null);
+  
+  // Estados de Produtos (Filhos do Cliente)
   const [clientProducts, setClientProducts] = useState<ClientProduct[]>([]);
   const [newProductName, setNewProductName] = useState('');
   const [newProductImage, setNewProductImage] = useState<File | null>(null);
-  const [clientSearch, setClientSearch] = useState('');
-  const [lineSearch, setLineSearch] = useState('');
-  
-  const [editingEntity, setEditingEntity] = useState<{ id: number, name: string, type: 'clients' | 'product-lines', cnpj?: string, endereco?: string, responsavel?: string, telefone?: string, email?: string } | null>(null);
   const [editingProduct, setEditingProduct] = useState<{ id: number, name: string, image_url?: string } | null>(null);
   const [editingProductImage, setEditingProductImage] = useState<File | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
-  const registrationFormRef = useRef<HTMLDivElement>(null);
-
-  const clearRegistrationForm = () => {
+  // Função para abrir modal de NOVO cadastro
+  const openNewModal = () => {
     setRegName(''); setRegCnpj(''); setRegEndereco(''); setRegResponsavel(''); setRegTelefone(''); setRegEmail('');
     setSelectedClient(null); setClientProducts([]);
+    setRegType(viewMode); // O modal abre no mesmo tipo da aba que o usuário está vendo
+    setIsModalOpen(true);
   };
 
-  const handleSelectClient = async (client: Entity) => {
+  // Função para abrir modal EDITANDO um Cliente
+  const handleEditClient = async (client: Entity) => {
     setSelectedClient(client);
     setRegName(client.name); setRegCnpj(client.cnpj || ''); setRegEndereco(client.endereco || '');
     setRegResponsavel(client.responsavel || ''); setRegTelefone(client.telefone || ''); setRegEmail(client.email || '');
     setRegType('clients');
-    registrationFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setIsModalOpen(true);
     try {
       const res = await fetch(`/api/clients/${client.id}/products`);
       if (res.ok) setClientProducts(await res.json());
     } catch (err) { console.error(err); }
   };
 
-  const handleAddRegistration = async (e: React.FormEvent) => {
+  // Função para abrir modal EDITANDO uma Linha
+  const handleEditLine = (line: Entity) => {
+    setSelectedClient(line); // Usamos o mesmo estado para guardar o ID do item sendo editado
+    setRegName(line.name);
+    setRegType('product-lines');
+    setIsModalOpen(true);
+  };
+
+  const handleSaveRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName) return;
 
@@ -62,52 +78,44 @@ export const Registrations: React.FC<RegistrationsProps> = ({ clients, setClient
         body.cnpj = regCnpj; body.endereco = regEndereco; body.responsavel = regResponsavel;
         body.telefone = regTelefone; body.email = regEmail;
       }
-      const method = (regType === 'clients' && selectedClient) ? 'PUT' : 'POST';
-      const url = (regType === 'clients' && selectedClient) ? `/api/clients/${selectedClient.id}` : `/api/${regType}`;
+      
+      const isEditing = !!selectedClient;
+      const method = isEditing ? 'PUT' : 'POST';
+      const url = isEditing ? `/api/${regType}/${selectedClient.id}` : `/api/${regType}`;
 
       const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) throw new Error('Falha ao salvar');
       
-      const newItem = await response.json();
-      if (regType === 'clients') {
-        if (selectedClient) {
-          setClients(clients.map(c => c.id === newItem.id ? newItem : c));
-          setSelectedClient(newItem);
-        } else setClients([newItem, ...clients]);
-      } else setProductLines([newItem, ...productLines]);
+      const savedItem = await response.json();
       
-      if (!selectedClient) clearRegistrationForm();
+      if (regType === 'clients') {
+        if (isEditing) setClients(clients.map(c => c.id === savedItem.id ? savedItem : c));
+        else setClients([savedItem, ...clients]);
+        setSelectedClient(savedItem); // Mantém selecionado para permitir adicionar produtos logo em seguida
+      } else {
+        if (isEditing) setProductLines(productLines.map(l => l.id === savedItem.id ? savedItem : l));
+        else setProductLines([savedItem, ...productLines]);
+        setIsModalOpen(false); // Linha não tem produtos, então fecha o modal ao salvar
+      }
+      
+      if (!isEditing && regType === 'clients') {
+          // Se acabou de criar o cliente, damos a ele o ID para poder cadastrar produtos sem fechar a tela
+          setSelectedClient(savedItem);
+      }
     } catch (err) { alert('Erro ao salvar'); }
   };
 
-  const handleDeleteRegistration = async (type: typeof regType, id: number) => {
-    if (!confirm('Excluir este cadastro?')) return;
+  const handleDeleteRegistration = async (type: 'clients' | 'product-lines', id: number) => {
+    if (!confirm('Excluir este cadastro definitivamente?')) return;
     try {
       const res = await fetch(`/api/${type}/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Falha ao excluir');
       if (type === 'clients') {
         setClients(clients.filter(c => c.id !== id));
-        if (selectedClient?.id === id) { setSelectedClient(null); setClientProducts([]); }
-      } else setProductLines(productLines.filter(l => l.id !== id));
-    } catch (err) { alert('Erro ao excluir'); }
-  };
-
-  const handleUpdateRegistration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingEntity) return;
-    try {
-      const body: any = { name: editingEntity.name.toUpperCase() };
-      if (editingEntity.type === 'clients') {
-        body.cnpj = editingEntity.cnpj; body.telefone = editingEntity.telefone;
+      } else {
+        setProductLines(productLines.filter(l => l.id !== id));
       }
-      const res = await fetch(`/api/${editingEntity.type}/${editingEntity.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error('Falha ao atualizar');
-      const updated = await res.json();
-      if (editingEntity.type === 'clients') {
-        setClients(clients.map(c => c.id === updated.id ? updated : c));
-      } else setProductLines(productLines.map(l => l.id === updated.id ? updated : l));
-      setEditingEntity(null);
-    } catch (err) { alert('Erro ao atualizar'); }
+    } catch (err) { alert('Erro ao excluir'); }
   };
 
   const uploadImage = async (file: File) => {
@@ -159,136 +167,230 @@ export const Registrations: React.FC<RegistrationsProps> = ({ clients, setClient
     } catch (err) { alert('Erro'); }
   };
 
+  // Filtros da Tabela
+  const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.cnpj && c.cnpj.includes(searchQuery)));
+  const filteredLines = productLines.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
   return (
-    <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Cadastros</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 font-medium">Gerencie clientes e linhas de produtos.</p>
+    <div className="space-y-8">
+      
+      {/* Tabela Principal e Filtros */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors">
+        
+        {/* Cabeçalho da Tabela */}
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex flex-col gap-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
+              <Settings className="w-5 h-5 text-indigo-600" /> Gestão de Cadastros
+            </h2>
+            <button onClick={openNewModal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all">
+              <Plus className="w-5 h-5" /> Novo Cadastro
+            </button>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Alternador de Visão (Tabs) */}
+            <div className="flex p-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl w-full sm:w-auto">
+              <button 
+                onClick={() => setViewMode('clients')} 
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${viewMode === 'clients' ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+              >
+                <Users className="w-4 h-4" /> Clientes
+              </button>
+              <button 
+                onClick={() => setViewMode('product-lines')} 
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${viewMode === 'product-lines' ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+              >
+                <Layers className="w-4 h-4" /> Linhas de Produto
+              </button>
+            </div>
+
+            {/* Barra de Busca */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder={`Buscar ${viewMode === 'clients' ? 'cliente...' : 'linha...'}`} 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)} 
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm outline-none text-zinc-900 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" 
+              />
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 px-4 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          <div className="flex flex-col items-end"><span className="text-[10px] text-zinc-400">CLIENTES</span><span className="text-sm font-black dark:text-white">{clients.length}</span></div>
-          <div className="w-px h-8 bg-zinc-100 dark:bg-zinc-800" />
-          <div className="flex flex-col items-end"><span className="text-[10px] text-zinc-400">LINHAS</span><span className="text-sm font-black dark:text-white">{productLines.length}</span></div>
+
+        {/* Tabela de Dados */}
+        <div className="overflow-x-auto min-h-[400px]">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-zinc-50/50 dark:bg-zinc-800/50">
+                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">{viewMode === 'clients' ? 'Nome / Razão Social' : 'Descrição da Linha'}</th>
+                {viewMode === 'clients' && <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">CNPJ/CPF</th>}
+                {viewMode === 'clients' && <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Contato</th>}
+                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {viewMode === 'clients' ? (
+                // Lista de Clientes
+                filteredClients.map(c => (
+                  <tr key={c.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-zinc-900 dark:text-white">{c.name}</div>
+                      <div className="text-xs text-zinc-500">{c.endereco || '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">{c.cnpj || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                      <div>{c.responsavel || '-'}</div>
+                      <div className="text-xs text-zinc-500">{c.telefone || '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => handleEditClient(c)} className="p-2 text-indigo-400 hover:text-indigo-600" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteRegistration('clients', c.id)} className="p-2 text-red-400 hover:text-red-600" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                // Lista de Linhas de Produto
+                filteredLines.map(l => (
+                  <tr key={l.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-zinc-900 dark:text-white">{l.name}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => handleEditLine(l)} className="p-2 text-indigo-400 hover:text-indigo-600" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteRegistration('product-lines', l.id)} className="p-2 text-red-400 hover:text-red-600" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {((viewMode === 'clients' && filteredClients.length === 0) || (viewMode === 'product-lines' && filteredLines.length === 0)) && (
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-zinc-400 font-medium">Nenhum registro encontrado.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-        {/* Formulário lateral */}
-        <div ref={registrationFormRef} className="xl:col-span-4 space-y-6 sticky top-8">
-          <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden relative">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-3">
-                  <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl">
-                    {selectedClient ? <Edit2 className="w-6 h-6 text-indigo-600" /> : <Plus className="w-6 h-6 text-indigo-600" />}
+{/* MODAL QUADRADO CENTRALIZADO */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-zinc-900 rounded-[2rem] w-full max-w-3xl shadow-2xl flex flex-col relative max-h-[90vh] overflow-hidden"
+            >
+              {/* Cabeçalho do Modal (Fixo) */}
+              <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-800/20 shrink-0">
+                <h3 className="text-xl font-black text-zinc-900 dark:text-white flex items-center gap-2">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl">
+                    {selectedClient ? <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Plus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
                   </div>
                   {selectedClient ? 'Editar Cadastro' : 'Novo Cadastro'}
-                </h2>
-                {selectedClient && <button onClick={clearRegistrationForm} className="text-[10px] text-indigo-600 font-black px-3 py-1.5 bg-indigo-50 rounded-full">Limpar</button>}
+                </h3>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
 
-              <form onSubmit={handleAddRegistration} className="space-y-6">
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl">
-                    <button type="button" onClick={() => setRegType('clients')} className={`py-2.5 text-xs font-black rounded-xl ${regType === 'clients' ? 'bg-white dark:bg-zinc-700 text-indigo-600' : 'text-zinc-500'}`}>CLIENTE</button>
-                    <button type="button" onClick={() => setRegType('product-lines')} className={`py-2.5 text-xs font-black rounded-xl ${regType === 'product-lines' ? 'bg-white dark:bg-zinc-700 text-indigo-600' : 'text-zinc-500'}`}>LINHA PROD.</button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <input type="text" required value={regName} onChange={e => setRegName(e.target.value)} placeholder="NOME / RAZÃO SOCIAL" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white font-bold" />
-                </div>
-                {regType === 'clients' && (
-                  <div className="space-y-5">
-                    <input type="text" required value={regCnpj} onChange={e => setRegCnpj(e.target.value)} placeholder="CNPJ" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white" />
-                    <input type="text" required value={regEndereco} onChange={e => setRegEndereco(e.target.value)} placeholder="ENDEREÇO COMPLETO" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input type="text" required value={regResponsavel} onChange={e => setRegResponsavel(e.target.value)} placeholder="RESPONSÁVEL" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white" />
-                      <input type="text" required value={regTelefone} onChange={e => setRegTelefone(e.target.value)} placeholder="TELEFONE" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white" />
-                    </div>
-                    <input type="email" required value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="E-MAIL" className="w-full px-5 py-4 bg-zinc-50 dark:bg-zinc-800 rounded-2xl outline-none dark:text-white" />
+              {/* Corpo do Modal (Com Scroll Automático) */}
+              <div className="p-6 sm:p-8 overflow-y-auto flex-1">
+                
+                {/* Alternador de Tipo (Aparece apenas ao Criar Novo) */}
+                {!selectedClient && (
+                  <div className="flex p-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl mb-8 shrink-0">
+                    <button type="button" onClick={() => setRegType('clients')} className={`flex-1 py-2.5 text-sm font-black rounded-lg transition-all ${regType === 'clients' ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-zinc-500'}`}>CLIENTE</button>
+                    <button type="button" onClick={() => setRegType('product-lines')} className={`flex-1 py-2.5 text-sm font-black rounded-lg transition-all ${regType === 'product-lines' ? 'bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-zinc-500'}`}>LINHA DE PRODUTO</button>
                   </div>
                 )}
-                <button type="submit" className="w-full bg-zinc-900 dark:bg-indigo-600 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3">
-                  <Check className="w-6 h-6" /> {selectedClient ? 'Salvar Alterações' : 'Confirmar Cadastro'}
-                </button>
-              </form>
 
-              {/* Gestão de Produtos do Cliente */}
-              {selectedClient && (
-                <div className="mt-8 pt-8 border-t border-zinc-100 dark:border-zinc-800">
-                  <h4 className="font-bold dark:text-white mb-4 flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-indigo-600" /> Produtos: {selectedClient.name}</h4>
-                  <form onSubmit={handleAddClientProduct} className="flex gap-2 mb-4">
-                    <input type="text" required value={newProductName} onChange={e => setNewProductName(e.target.value)} placeholder="Novo produto..." className="flex-1 px-3 py-1.5 text-sm bg-zinc-50 dark:bg-zinc-800 rounded-lg outline-none dark:text-white" />
-                    <button type="submit" className="p-1.5 bg-indigo-600 text-white rounded-lg"><Plus className="w-4 h-4" /></button>
-                  </form>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                    {clientProducts.map(p => (
-                      <div key={p.id} className="flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded-lg">
-                        {editingProduct?.id === p.id ? (
-                          <form onSubmit={handleUpdateClientProduct} className="flex gap-2">
-                            <input value={editingProduct.name} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} className="px-2 py-1 bg-white dark:bg-zinc-900 text-xs dark:text-white" />
-                            <button type="submit"><Check className="w-4 h-4 text-emerald-500" /></button>
-                            <button type="button" onClick={() => setEditingProduct(null)}><X className="w-4 h-4 text-red-500" /></button>
-                          </form>
-                        ) : (
-                          <>
-                            <span className="text-xs font-medium dark:text-white">{p.product_name}</span>
-                            <div className="flex gap-1">
-                              <button onClick={() => setEditingProduct({ id: p.id, name: p.product_name, image_url: p.image_url })}><Edit2 className="w-3 h-3 text-indigo-400" /></button>
-                              <button onClick={() => handleDeleteClientProduct(p.id)}><Trash2 className="w-3 h-3 text-red-400" /></button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                {/* Formulário */}
+                <form onSubmit={handleSaveRegistration} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{regType === 'clients' ? 'Razão Social / Nome' : 'Nome da Linha de Produto'} *</label>
+                    <input type="text" required value={regName} onChange={e => setRegName(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+                  
+                  {regType === 'clients' && (
+                    <div className="space-y-5">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">CNPJ</label>
+                        <input type="text" value={regCnpj} onChange={e => setRegCnpj(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Endereço Completo</label>
+                        <input type="text" value={regEndereco} onChange={e => setRegEndereco(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Responsável</label>
+                          <input type="text" value={regResponsavel} onChange={e => setRegResponsavel(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Telefone</label>
+                          <input type="text" value={regTelefone} onChange={e => setRegTelefone(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">E-mail</label>
+                        <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full px-5 py-3.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all" />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-indigo-500/20">
+                    <Check className="w-5 h-5" /> {selectedClient ? 'Salvar Alterações' : 'Confirmar Cadastro'}
+                  </button>
+                </form>
 
-        {/* Listas de Clientes e Linhas */}
-        <div className="xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Lista de Clientes */}
-          <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col">
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50">
-              <h4 className="font-black text-lg dark:text-white mb-4">Clientes</h4>
-              <input type="text" placeholder="Buscar cliente..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full px-4 py-2 bg-white dark:bg-zinc-800 rounded-xl outline-none dark:text-white" />
-            </div>
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[45rem] overflow-y-auto">
-              {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(c => (
-                <div key={c.id} onClick={() => handleSelectClient(c)} className={`p-4 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 ${selectedClient?.id === c.id ? 'bg-indigo-50 dark:bg-indigo-900/10' : ''}`}>
-                  <div className="font-black dark:text-white">{c.name}</div>
-                  <div className="text-xs text-zinc-500 mt-1">{c.cnpj} | {c.responsavel}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+                {/* Área de Produtos do Cliente (Aparece SOMENTE se o Cliente já existir) */}
+                {selectedClient && regType === 'clients' && (
+                  <div className="mt-10 pt-8 border-t border-zinc-200 dark:border-zinc-800">
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="font-black text-lg dark:text-white flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-indigo-600" /> Produtos do Cliente</h4>
+                      <span className="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-3 py-1 rounded-full">{clientProducts.length} itens</span>
+                    </div>
+                    
+                    <form onSubmit={handleAddClientProduct} className="flex gap-2 mb-6">
+                      <input type="text" required value={newProductName} onChange={e => setNewProductName(e.target.value)} placeholder="Nome do novo produto..." className="flex-1 px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500" />
+                      <button type="submit" className="px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold rounded-xl hover:scale-105 transition-transform"><Plus className="w-5 h-5" /></button>
+                    </form>
+                    
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                      {clientProducts.map(p => (
+                        <div key={p.id} className="flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                          {editingProduct?.id === p.id ? (
+                            <form onSubmit={handleUpdateClientProduct} className="flex gap-2 w-full">
+                              <input value={editingProduct.name} onChange={e => setEditingProduct({ ...editingProduct, name: e.target.value })} className="flex-1 px-3 py-1.5 bg-white dark:bg-zinc-900 rounded-lg outline-none text-sm font-bold dark:text-white border border-zinc-200 dark:border-zinc-700" />
+                              <button type="submit" className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200"><Check className="w-4 h-4" /></button>
+                              <button type="button" onClick={() => setEditingProduct(null)} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"><X className="w-4 h-4" /></button>
+                            </form>
+                          ) : (
+                            <>
+                              <span className="text-sm font-bold dark:text-white">{p.product_name}</span>
+                              <div className="flex gap-1">
+                                <button onClick={() => setEditingProduct({ id: p.id, name: p.product_name, image_url: p.image_url })} className="p-2 text-indigo-400 hover:text-indigo-600 bg-white dark:bg-zinc-900 rounded-lg shadow-sm"><Edit2 className="w-4 h-4" /></button>
+                                <button onClick={() => handleDeleteClientProduct(p.id)} className="p-2 text-red-400 hover:text-red-600 bg-white dark:bg-zinc-900 rounded-lg shadow-sm"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {clientProducts.length === 0 && <p className="text-sm text-center text-zinc-400 italic py-4">Nenhum produto cadastrado para este cliente.</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {/* Lista de Linhas */}
-          <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col">
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50">
-              <h4 className="font-black text-lg dark:text-white mb-4">Linhas de Produto</h4>
-              <input type="text" placeholder="Buscar linha..." value={lineSearch} onChange={e => setLineSearch(e.target.value)} className="w-full px-4 py-2 bg-white dark:bg-zinc-800 rounded-xl outline-none dark:text-white" />
-            </div>
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[45rem] overflow-y-auto">
-              {productLines.filter(l => l.name.toLowerCase().includes(lineSearch.toLowerCase())).map(l => (
-                <div key={l.id} className="p-4 flex justify-between items-center hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <span className="font-black dark:text-white">{l.name}</span>
-                  <button onClick={() => handleDeleteRegistration('product-lines', l.id)}><Trash2 className="w-4 h-4 text-red-400" /></button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal de Imagem */}
+      {/* Modal de Zoom de Imagens (Herdado caso adicione a funcionalidade de upload no futuro) */}
       <AnimatePresence>
         {viewingImage && (
-          <motion.div onClick={() => setViewingImage(null)} className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
+          <motion.div onClick={() => setViewingImage(null)} className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4">
             <img src={viewingImage} className="max-w-full max-h-[85vh] rounded-xl" />
           </motion.div>
         )}

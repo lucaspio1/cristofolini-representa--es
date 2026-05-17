@@ -1,76 +1,19 @@
 import { Request, Response } from 'express';
-import db from '../database/db';
+import pool from '../database/db';
 
-export const getSales = (req: Request, res: Response) => {
+// Função auxiliar para transformar textos vazios em NULL para o MySQL não reclamar
+const safeDate = (val: string | undefined | null) => (val && val.trim() !== '') ? val : null;
+
+export const getSales = async (req: Request, res: Response) => {
   try {
-    const sales = db.prepare('SELECT * FROM sales ORDER BY sale_date DESC').all();
-    res.json(sales);
+    const [rows] = await pool.query('SELECT * FROM sales ORDER BY sale_date DESC');
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch sales' });
   }
 };
 
-export const createSale = (req: Request, res: Response) => {
-  const { 
-    cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
-    produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
-    data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
-    comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
-    data_faturamento, valor_total_nf, fator_kilo, payment_method, installments 
-  } = req.body;
-  
-  if (!produto || valor_total_nf === undefined || comissao_percentage === undefined) {
-    return res.status(400).json({ error: 'Missing required fields (produto, valor_total_nf, comissao_percentage)' });
-  }
-
-  const commission_value = (valor_total_nf * comissao_percentage) / 100;
-
-  const transaction = db.transaction(() => {
-    const stmt = db.prepare(`
-      INSERT INTO sales (
-        cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
-        produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
-        data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
-        comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
-        data_faturamento, valor_total_nf, fator_kilo, commission_value, payment_method
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    const info = stmt.run(
-      cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
-      produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
-      data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
-      comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
-      data_faturamento, valor_total_nf, fator_kilo, commission_value, payment_method || 'À VISTA'
-    );
-
-    const saleId = info.lastInsertRowid;
-
-    if (payment_method === 'A PRAZO' && Array.isArray(installments)) {
-      const instStmt = db.prepare(`
-        INSERT INTO installments (sale_id, installment_number, due_date, value)
-        VALUES (?, ?, ?, ?)
-      `);
-      for (const inst of installments) {
-        instStmt.run(saleId, inst.installment_number, inst.due_date, inst.value);
-      }
-    }
-
-    return saleId;
-  });
-
-  try {
-    const saleId = transaction();
-    const savedSale = db.prepare('SELECT * FROM sales WHERE id = ?').get(saleId);
-    res.json(savedSale);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to save sale' });
-  }
-};
-
-export const updateSale = (req: Request, res: Response) => {
-  const { id } = req.params;
+export const createSale = async (req: Request, res: Response) => {
   const { 
     cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
     produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
@@ -84,9 +27,68 @@ export const updateSale = (req: Request, res: Response) => {
   }
 
   const commission_value = (valor_total_nf * comissao_percentage) / 100;
+  const connection = await pool.getConnection();
 
-  const transaction = db.transaction(() => {
-    const stmt = db.prepare(`
+  try {
+    await connection.beginTransaction();
+    
+    const [info]: any = await connection.query(`
+      INSERT INTO sales (
+        cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
+        produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
+        data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
+        comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
+        data_faturamento, valor_total_nf, fator_kilo, commission_value, payment_method
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      cliente, cotacao, op_producao, safeDate(data_emissao_pedido), op_referencia, 
+      produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
+      safeDate(data_finalizacao_produto), safeDate(data_entrega_cliente), ordem_compra, 
+      comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
+      safeDate(data_faturamento), valor_total_nf, fator_kilo, commission_value, payment_method || 'À VISTA'
+    ]);
+
+    const saleId = info.insertId;
+
+    if (payment_method === 'A PRAZO' && Array.isArray(installments)) {
+      for (const inst of installments) {
+        await connection.query(`
+          INSERT INTO installments (sale_id, installment_number, due_date, value)
+          VALUES (?, ?, ?, ?)
+        `, [saleId, inst.installment_number, safeDate(inst.due_date), inst.value]);
+      }
+    }
+
+    await connection.commit();
+    
+    const [savedSale] = await pool.query('SELECT * FROM sales WHERE id = ?', [saleId]);
+    res.json((savedSale as any)[0]);
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ error: 'Failed to save sale' });
+  } finally {
+    connection.release();
+  }
+};
+
+export const updateSale = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { 
+    cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
+    produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
+    data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
+    comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
+    data_faturamento, valor_total_nf, fator_kilo, payment_method, installments 
+  } = req.body;
+  
+  const commission_value = (valor_total_nf * comissao_percentage) / 100;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    
+    await connection.query(`
       UPDATE sales SET
         cliente = ?, cotacao = ?, op_producao = ?, data_emissao_pedido = ?, op_referencia = ?, 
         produto = ?, peso_solicitado = ?, qtd_sacos_solicitado = ?, linha_produto = ?, 
@@ -95,53 +97,52 @@ export const updateSale = (req: Request, res: Response) => {
         data_faturamento = ?, valor_total_nf = ?, fator_kilo = ?, commission_value = ?,
         payment_method = ?
       WHERE id = ?
-    `);
-    
-    stmt.run(
-      cliente, cotacao, op_producao, data_emissao_pedido, op_referencia, 
+    `, [
+      cliente, cotacao, op_producao, safeDate(data_emissao_pedido), op_referencia, 
       produto, peso_solicitado, qtd_sacos_solicitado, linha_produto, 
-      data_finalizacao_produto, data_entrega_cliente, ordem_compra, 
+      safeDate(data_finalizacao_produto), safeDate(data_entrega_cliente), ordem_compra, 
       comissao_percentage, numero_nf, peso_finalizado, qtd_sacos_finalizado, 
-      data_faturamento, valor_total_nf, fator_kilo, commission_value,
-      payment_method || 'À VISTA',
-      id
-    );
+      safeDate(data_faturamento), valor_total_nf, fator_kilo, commission_value,
+      payment_method || 'À VISTA', id
+    ]);
 
-    db.prepare('DELETE FROM installments WHERE sale_id = ?').run(id);
+    await connection.query('DELETE FROM installments WHERE sale_id = ?', [id]);
+    
     if (payment_method === 'A PRAZO' && Array.isArray(installments)) {
-      const instStmt = db.prepare(`
-        INSERT INTO installments (sale_id, installment_number, due_date, value, payment_date)
-        VALUES (?, ?, ?, ?, ?)
-      `);
       for (const inst of installments) {
-        instStmt.run(id, inst.installment_number, inst.due_date, inst.value, inst.payment_date || null);
+        await connection.query(`
+          INSERT INTO installments (sale_id, installment_number, due_date, value, payment_date)
+          VALUES (?, ?, ?, ?, ?)
+        `, [id, inst.installment_number, safeDate(inst.due_date), inst.value, safeDate(inst.payment_date)]);
       }
     }
-  });
 
-  try {
-    transaction();
-    const updatedSale = db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
-    res.json(updatedSale);
+    await connection.commit();
+    
+    const [updatedSale] = await pool.query('SELECT * FROM sales WHERE id = ?', [id]);
+    res.json((updatedSale as any)[0]);
   } catch (error) {
+    await connection.rollback();
     console.error(error);
     res.status(500).json({ error: 'Failed to update sale' });
+  } finally {
+    connection.release();
   }
 };
 
-export const deleteSale = (req: Request, res: Response) => {
+export const deleteSale = async (req: Request, res: Response) => {
   try {
-    db.prepare('DELETE FROM sales WHERE id = ?').run(req.params.id);
+    await pool.query('DELETE FROM sales WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete sale' });
   }
 };
 
-export const getSaleInstallments = (req: Request, res: Response) => {
+export const getSaleInstallments = async (req: Request, res: Response) => {
   try {
-    const installments = db.prepare('SELECT * FROM installments WHERE sale_id = ? ORDER BY installment_number ASC').all(req.params.id);
-    res.json(installments);
+    const [rows] = await pool.query('SELECT * FROM installments WHERE sale_id = ? ORDER BY installment_number ASC', [req.params.id]);
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch installments' });
   }

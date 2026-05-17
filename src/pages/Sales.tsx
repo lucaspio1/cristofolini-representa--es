@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Plus, Edit2, Trash2, History, Search, Filter, Layers, X, 
-  ChevronRight, Calendar, AlertCircle, Check, ZoomIn, Package 
+  Plus, Edit2, Trash2, History, ChevronRight, Check, ZoomIn 
 } from 'lucide-react';
 import { Sale, Entity, ClientProduct, Installment } from '../types';
 
@@ -11,9 +10,10 @@ interface SalesProps {
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   clients: Entity[];
   productLines: Entity[];
+  setAllInstallments: React.Dispatch<React.SetStateAction<Installment[]>>;
 }
 
-export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productLines }) => {
+export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productLines, setAllInstallments }) => {
   const [formData, setFormData] = useState({
     cliente: '', cotacao: '', op_producao: '', data_emissao_pedido: '', 
     op_referencia: '', produto: '', peso_solicitado: '', qtd_sacos_solicitado: '', 
@@ -27,11 +27,7 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
   const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
   const [saleClientProducts, setSaleClientProducts] = useState<ClientProduct[]>([]);
   const [previewInstallments, setPreviewInstallments] = useState<Installment[]>([]);
-  const [expandedSaleId, setExpandedSaleId] = useState<number | null>(null);
-  const [saleInstallments, setSaleInstallments] = useState<Record<number, Installment[]>>({});
   const [viewingImage, setViewingImage] = useState<string | null>(null);
-
-  const [filters, setFilters] = useState({ search: '', status: 'all', line: 'all' });
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => dateString ? new Date(dateString).toLocaleDateString('pt-BR') : '-';
@@ -51,16 +47,6 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     if (diffDays < 0) return { label: 'ATRASADO', color: 'bg-red-50 text-red-700 border-red-100' };
     if (diffDays > 5) return { label: 'NO PRAZO', color: 'bg-blue-50 text-blue-700 border-blue-100' };
     return { label: 'ALERTA', color: 'bg-amber-50 text-amber-700 border-amber-100' };
-  };
-
-  const getInstallmentStatus = (inst: Installment) => {
-    if (inst.payment_date) return { label: 'PAGO', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
-    const dueDate = new Date(inst.due_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    dueDate.setHours(0, 0, 0, 0);
-    if (dueDate < today) return { label: 'ATRASADO', color: 'bg-red-50 text-red-700 border-red-100' };
-    return { label: 'PENDENTE', color: 'bg-zinc-50 text-zinc-600 border-zinc-200' };
   };
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -156,6 +142,11 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
       });
       setPreviewInstallments([]);
       setSaleClientProducts([]);
+
+      const instRes = await fetch('/api/installments');
+      if (instRes.ok) {
+        setAllInstallments(await instRes.json());
+      }
     } catch (err) { alert(err instanceof Error ? err.message : 'Erro ao salvar'); } finally { setIsAdding(false); }
   };
 
@@ -202,37 +193,9 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
       const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Falha ao excluir');
       setSales(sales.filter(s => s.id !== id));
+      setAllInstallments(prev => prev.filter(i => i.sale_id !== id));
     } catch (err) { alert('Erro ao excluir'); }
   };
-
-const toggleExpandSale = async (saleId: number) => {
-    if (expandedSaleId === saleId) { 
-      setExpandedSaleId(null); 
-      return; 
-    }
-    
-    setExpandedSaleId(saleId);
-    
-    if (!saleInstallments[saleId]) {
-      try {
-        const res = await fetch(`/api/sales/${saleId}/installments`);
-        if (res.ok) {
-          const data = await res.json(); // Resolvemos o JSON aqui fora
-          setSaleInstallments(prev => ({ ...prev, [saleId]: data })); // Passamos o dado pronto para o estado
-        }
-      } catch (err) { 
-        console.error(err); 
-      }
-    }
-  };
-
-  const filteredSales = sales.filter(sale => {
-    const matchesSearch = (sale.cliente?.toLowerCase() || '').includes(filters.search.toLowerCase()) || (sale.produto?.toLowerCase() || '').includes(filters.search.toLowerCase()) || (sale.op_producao?.toLowerCase() || '').includes(filters.search.toLowerCase()) || (sale.numero_nf?.toLowerCase() || '').includes(filters.search.toLowerCase());
-    const status = getSaleStatus(sale).label;
-    const matchesStatus = filters.status === 'all' || status === filters.status;
-    const matchesLine = filters.line === 'all' || sale.linha_produto === filters.line;
-    return matchesSearch && matchesStatus && matchesLine;
-  });
 
   const currentCommissionPreview = (parseFloat(formData.valor_total_nf) || 0) * (parseFloat(formData.comissao_percentage) || 0) / 100;
   const currentFatorKilo = (parseFloat(formData.peso_finalizado) > 0) ? (parseFloat(formData.valor_total_nf) || 0) / parseFloat(formData.peso_finalizado) : 0;
@@ -361,7 +324,7 @@ const toggleExpandSale = async (saleId: number) => {
                   {previewInstallments.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       {previewInstallments.map((inst, idx) => (
-                        <div key={idx} className="p-2 bg-white dark:bg-zinc-900 border border-zinc-100 rounded-lg">
+                        <div key={idx} className="p-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-lg">
                           <div className="flex justify-between"><span className="text-[10px] font-bold text-indigo-600">PARCELA {inst.installment_number}</span><span className="text-[10px] text-zinc-400">{formatDate(inst.due_date)}</span></div>
                           <div className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{formatCurrency(inst.value)}</div>
                         </div>
@@ -381,20 +344,17 @@ const toggleExpandSale = async (saleId: number) => {
         </form>
       </div>
 
-      {/* Histórico e Tabela */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2"><History className="w-5 h-5 text-indigo-600" /> Histórico Completo</h2>
-            <span className="text-xs font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full">{filteredSales.length} de {sales.length} Pedidos</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative"><Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" /><input type="text" placeholder="Buscar..." value={filters.search} onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm outline-none text-zinc-900 dark:text-white" /></div>
-            <div className="relative"><Filter className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" /><select value={filters.status} onChange={e => setFilters(p => ({ ...p, status: e.target.value }))} className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm outline-none text-zinc-900 dark:text-white"><option value="all">Todos Status</option><option value="ATRASADO">Atrasado</option><option value="ALERTA">Alerta</option><option value="NO PRAZO">No Prazo</option><option value="CUMPRIDO">Cumprido</option></select></div>
-            <div className="relative"><Layers className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" /><select value={filters.line} onChange={e => setFilters(p => ({ ...p, line: e.target.value }))} className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm outline-none text-zinc-900 dark:text-white"><option value="all">Todas Linhas</option>{productLines.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}</select></div>
-            <button onClick={() => setFilters({ search: '', status: 'all', line: 'all' })} className="text-sm font-medium text-indigo-600 flex items-center justify-center gap-1"><X className="w-4 h-4" /> Limpar Filtros</button>
-          </div>
+      {/* Histórico Simplificado - Apenas as Últimas 10 Vendas */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors">
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" /> Últimos 10 Pedidos Lançados
+          </h2>
+          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-full">
+            Cadastro Rápido
+          </span>
         </div>
+        
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -404,43 +364,39 @@ const toggleExpandSale = async (saleId: number) => {
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Datas</th>
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Status</th>
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Valores</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase text-right">Comissão</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase"></th>
+                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filteredSales.map(sale => (
-                <tr key={sale.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50">
+              {sales.slice(0, 10).map(sale => (
+                <tr key={sale.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-bold text-zinc-900 dark:text-white">{sale.cliente}</div>
-                    <div className="text-xs text-zinc-500">{sale.produto} ({sale.linha_produto})</div>
-                    <div className="flex gap-2 mt-1">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border">{sale.payment_method}</span>
-                      {sale.payment_method === 'A PRAZO' && (
-                        <button onClick={() => toggleExpandSale(sale.id)} className="text-[9px] text-indigo-600 flex items-center">{expandedSaleId === sale.id ? 'Ocultar' : 'Ver Parcelas'} <ChevronRight className="w-2.5 h-2.5"/></button>
-                      )}
-                    </div>
+                    <div className="text-xs text-zinc-500">{sale.produto}</div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">OP: {sale.op_producao}<br/><span className="text-xs text-zinc-500">NF: {sale.numero_nf}</span></td>
-                  <td className="px-6 py-4 text-xs text-zinc-500">Emissão: {formatDate(sale.data_emissao_pedido)}<br/>Prod: {formatDate(sale.data_finalizacao_produto)}</td>
-                  <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${getSaleStatus(sale).color}`}>{getSaleStatus(sale).label}</span></td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="font-bold">{formatCurrency(sale.valor_total_nf)}</div>
-                    <div className="text-xs text-zinc-500">{sale.peso_finalizado}kg / {sale.qtd_sacos_finalizado} sc</div>
+                  <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">OP: {sale.op_producao}</td>
+                  <td className="px-6 py-4 text-xs text-zinc-500">{formatDate(sale.data_emissao_pedido)}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${getSaleStatus(sale).color}`}>
+                      {getSaleStatus(sale).label}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-right font-bold text-indigo-600">{formatCurrency(sale.commission_value)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => handleEditClick(sale)} className="p-2 text-indigo-400"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => handleDeleteSale(sale.id)} className="p-2 text-red-400"><Trash2 className="w-4 h-4" /></button>
+                  <td className="px-6 py-4 text-right font-bold dark:text-white">{formatCurrency(sale.valor_total_nf)}</td>
+                  <td className="px-6 py-4 text-xs">
+                    <button type="button" onClick={() => handleEditClick(sale)} className="p-2 text-indigo-400 hover:text-indigo-500"><Edit2 className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleDeleteSale(sale.id)} className="p-2 text-red-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}
+              {sales.length === 0 && (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-zinc-400 font-medium">Nenhum pedido registrado recentemente.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
       
-      {/* Image Modal for viewing product photos */}
+      {/* Modal de Zoom de Imagens */}
       <AnimatePresence>
         {viewingImage && (
           <motion.div onClick={() => setViewingImage(null)} className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">

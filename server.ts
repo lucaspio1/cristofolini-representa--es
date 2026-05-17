@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-// Importando middlewares e banco de dados
-import db from './server/database/db';
+// Importando middlewares e banco de dados (Agora chamamos de 'pool' por causa do MySQL)
+import pool, { initDB } from './server/database/db';
 import { authenticateToken } from './server/middlewares/auth';
 import { upload, uploadsDir } from './server/middlewares/upload';
 
@@ -26,14 +26,20 @@ async function startServer() {
 
   app.use(express.json());
   
+  // Inicia o banco de dados MySQL e cria as tabelas se não existirem
+  await initDB();
+
   // Servir pasta de uploads de forma estática
   app.use('/uploads', express.static(uploadsDir));
 
   // --- Rotas de Autenticação ---
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
-      const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
+      // Usando a nova sintaxe do MySQL com o pool de conexões
+      const [rows]: any = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
+      const user = rows[0];
+
       if (!user) return res.status(401).json({ error: 'Usuário não encontrado' });
 
       const validPassword = bcrypt.compareSync(password, user.password);
@@ -42,6 +48,7 @@ async function startServer() {
       const token = jwt.sign({ id: user.id, username: user.username, name: user.name }, JWT_SECRET, { expiresIn: '24h' });
       res.json({ token, user: { id: user.id, username: user.username, name: user.name } });
     } catch (error) {
+      console.error('Erro no login:', error);
       res.status(500).json({ error: 'Erro ao fazer login' });
     }
   });
@@ -83,7 +90,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   });
 }
 

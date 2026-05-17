@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { LayoutDashboard, ShoppingBag, BarChart3, Settings, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, ClipboardList, BarChart3, Settings, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from './lib/ThemeContext';
 import { Sale, Entity, Installment, Tab } from './types';
 import { api } from './services/api';
@@ -13,6 +13,7 @@ import { HomeScreen } from './components/HomeScreen';
 // Importação das Páginas
 import { Dashboard } from './pages/Dashboard';
 import { Sales } from './pages/Sales';
+import { SalesReport } from './pages/SalesReport'; // IMPORTADO
 import { Reports } from './pages/Reports';
 import { Registrations } from './pages/Registrations';
 
@@ -20,8 +21,6 @@ export default function App() {
   const { theme } = useTheme();
   const [showHome, setShowHome] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  
-  // Novo Estado do Menu Lateral
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   // Estados Globais
@@ -52,7 +51,6 @@ export default function App() {
     }
   };
 
-  // Telas de Carregamento e Erro
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950">
@@ -86,105 +84,75 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col lg:flex-row transition-colors duration-300">
       
-      {/* Sidebar Desktop com lógica de recolhimento */}
-      <aside 
-        className={`hidden lg:flex flex-col bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 sticky top-0 h-screen z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-24' : 'w-72'}`}
-      >
+      {/* Sidebar Desktop */}
+      <aside className={`hidden lg:flex flex-col bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 sticky top-0 h-screen z-20 transition-all duration-300 ease-in-out ${isCollapsed ? 'w-24' : 'w-72'}`}>
         <div className={`p-6 flex items-center relative h-24 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           <Logo collapsed={isCollapsed} />
-          
-          {/* Botão para encolher/expandir */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="absolute -right-3.5 top-8 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full p-1.5 shadow-md transition-colors z-50 cursor-pointer"
-          >
+          <button onClick={() => setIsCollapsed(!isCollapsed)} className="absolute -right-3.5 top-8 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 rounded-full p-1.5 shadow-md z-50 cursor-pointer">
             {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          <button 
-            onClick={() => setActiveTab('dashboard')} 
-            title={isCollapsed ? "Dashboard" : ""}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white'}`}
-          >
+          <button onClick={() => setActiveTab('dashboard')} title={isCollapsed ? "Dashboard" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <LayoutDashboard className="w-5 h-5 shrink-0" />
-            {!isCollapsed && <span className="truncate">Dashboard</span>}
+            {!isCollapsed && <span>Dashboard</span>}
           </button>
-          
-          <button 
-            onClick={() => setActiveTab('sales')} 
-            title={isCollapsed ? "Vendas" : ""}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'sales' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white'}`}
-          >
+          <button onClick={() => setActiveTab('sales')} title={isCollapsed ? "Lançar Venda" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'sales' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <ShoppingBag className="w-5 h-5 shrink-0" />
-            {!isCollapsed && <span className="truncate">Vendas</span>}
+            {!isCollapsed && <span>Lançar Venda</span>}
           </button>
           
-          <button 
-            onClick={() => setActiveTab('reports')} 
-            title={isCollapsed ? "Relatórios" : ""}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white'}`}
-          >
+          {/* NOVO BOTÃO: RELATÓRIO DE VENDAS */}
+          <button onClick={() => setActiveTab('sales-report')} title={isCollapsed ? "Relatório Vendas" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'sales-report' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+            <ClipboardList className="w-5 h-5 shrink-0" />
+            {!isCollapsed && <span>Relatório Vendas</span>}
+          </button>
+
+          <button onClick={() => setActiveTab('reports')} title={isCollapsed ? "Relatório Financeiro" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <BarChart3 className="w-5 h-5 shrink-0" />
-            {!isCollapsed && <span className="truncate">Relatórios</span>}
+            {!isCollapsed && <span>Relatório Financeiro</span>}
           </button>
-          
-          <button 
-            onClick={() => setActiveTab('registrations')} 
-            title={isCollapsed ? "Cadastros" : ""}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'registrations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/20' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white'}`}
-          >
+          <button onClick={() => setActiveTab('registrations')} title={isCollapsed ? "Cadastros" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'registrations' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <Settings className="w-5 h-5 shrink-0" />
-            {!isCollapsed && <span className="truncate">Cadastros</span>}
+            {!isCollapsed && <span>Cadastros</span>}
           </button>
         </nav>
 
         <div className="p-4 space-y-4 mb-4 overflow-hidden">
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-2'} transition-all`}>
-            {!isCollapsed && <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest whitespace-nowrap">Aparência</span>}
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
+            {!isCollapsed && <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Aparência</span>}
             <ThemeToggle />
           </div>
-          
-          {!isCollapsed && (
-            <div className="bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800 transition-colors animate-in fade-in zoom-in-95 duration-300">
-              <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Hoje</div>
-              <div className="text-xs font-bold text-zinc-900 dark:text-white truncate">
-                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </div>
-              <div className="mt-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50">
-                <div className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-0.5">Desenvolvedor</div>
-                <div className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 truncate">Diego Oliveira - STC</div>
-              </div>
-            </div>
-          )}
         </div>
       </aside>
 
       {/* Header Mobile */}
-      <header className="lg:hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-30 px-4 h-16 flex items-center justify-between transition-colors">
+      <header className="lg:hidden bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-4 h-16 flex items-center justify-between sticky top-0 z-30">
         <Logo />
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-        </div>
+        <ThemeToggle />
       </header>
 
-      {/* Área Principal (Conteúdo Dinâmico) */}
+      {/* Área Principal */}
       <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 max-w-full overflow-x-hidden">
         {activeTab === 'dashboard' && <Dashboard sales={sales} clients={clients} allInstallments={allInstallments} />}
-        {activeTab === 'sales' && <Sales sales={sales} setSales={setSales} clients={clients} productLines={productLines} />}
+        {activeTab === 'sales' && <Sales sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
+        
+        {/* RENDERIZANDO A NOVA PÁGINA */}
+        {activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} productLines={productLines} setAllInstallments={setAllInstallments} />}
+        
         {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
         {activeTab === 'registrations' && <Registrations clients={clients} setClients={setClients} productLines={productLines} setProductLines={setProductLines} />}
       </main>
 
-      {/* Navbar Mobile (Bottom) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800 z-30 px-6 py-3 flex items-center justify-between transition-colors">
-        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}`}><LayoutDashboard className="w-6 h-6" /><span className="text-[10px] font-bold uppercase tracking-tighter">Dash</span></button>
-        <button onClick={() => setActiveTab('sales')} className={`flex flex-col items-center gap-1 ${activeTab === 'sales' ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}`}><ShoppingBag className="w-6 h-6" /><span className="text-[10px] font-bold uppercase tracking-tighter">Vendas</span></button>
-        <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}`}><BarChart3 className="w-6 h-6" /><span className="text-[10px] font-bold uppercase tracking-tighter">Relat.</span></button>
-        <button onClick={() => setActiveTab('registrations')} className={`flex flex-col items-center gap-1 ${activeTab === 'registrations' ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}`}><Settings className="w-6 h-6" /><span className="text-[10px] font-bold uppercase tracking-tighter">Cad.</span></button>
+      {/* Navbar Mobile */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 z-30 px-4 py-3 flex items-center justify-between">
+        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-zinc-400'}`}><LayoutDashboard className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Dash</span></button>
+        <button onClick={() => setActiveTab('sales')} className={`flex flex-col items-center gap-1 ${activeTab === 'sales' ? 'text-indigo-600' : 'text-zinc-400'}`}><ShoppingBag className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Lançar</span></button>
+        <button onClick={() => setActiveTab('sales-report')} className={`flex flex-col items-center gap-1 ${activeTab === 'sales-report' ? 'text-indigo-600' : 'text-zinc-400'}`}><ClipboardList className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Vendas</span></button>
+        <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-indigo-600' : 'text-zinc-400'}`}><BarChart3 className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Financ.</span></button>
+        <button onClick={() => setActiveTab('registrations')} className={`flex flex-col items-center gap-1 ${activeTab === 'registrations' ? 'text-indigo-600' : 'text-zinc-400'}`}><Settings className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Cad.</span></button>
       </nav>
-
     </div>
   );
 }
