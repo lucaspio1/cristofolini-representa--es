@@ -44,6 +44,7 @@ export interface Entity {
   responsavel?: string;
   telefone?: string;
   email?: string;
+  image?: string;
 }
 
 export interface ClientProduct {

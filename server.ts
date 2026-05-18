@@ -4,12 +4,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import multer from 'multer';
 
-// Importando middlewares e banco de dados (Agora chamamos de 'pool' por causa do MySQL)
+// Importando middlewares e banco de dados
 import pool, { initDB } from './server/database/db';
 import { authenticateToken } from './server/middlewares/auth';
-import { upload, uploadsDir } from './server/middlewares/upload';
+import { upload } from './server/middlewares/upload';
 
 // Importando Rotas
 import clientRoutes from './server/routes/clientRoutes';
@@ -17,7 +16,6 @@ import productLineRoutes from './server/routes/productLineRoutes';
 import salesRoutes from './server/routes/salesRoutes';
 import installmentRoutes from './server/routes/installmentRoutes';
 import userRoutes from './server/routes/userRoutes';
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,29 +27,16 @@ async function startServer() {
 
   app.use(express.json());
   
-  // Inicia o banco de dados MySQL e cria as tabelas se não existirem
+  // Inicia o banco de dados MySQL
   await initDB();
 
   // Servir pasta de uploads de forma estática
- app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-
-  const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-export const upload = multer({ storage: storage });
+  app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
   // --- Rotas de Autenticação ---
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     try {
-      // Usando a nova sintaxe do MySQL com o pool de conexões
       const [rows]: any = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
       const user = rows[0];
 
@@ -72,8 +57,7 @@ export const upload = multer({ storage: storage });
     res.json(req.user);
   });
 
-  // --- Rota de Upload ---
-  // Nota: Em breve vamos proteger isso!
+  // --- Rota de Upload Genérica ---
   app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const imageUrl = `/uploads/${req.file.filename}`;
@@ -81,14 +65,12 @@ export const upload = multer({ storage: storage });
   });
 
   // --- Registrando as Rotas Desmembradas ---
-  // Nota: Na etapa final, vamos colocar o 'authenticateToken' em todas essas linhas!
   app.use('/api/clients', clientRoutes);
   app.use('/api/product-lines', productLineRoutes);
   app.use('/api/sales', salesRoutes);
   app.use('/api/installments', installmentRoutes);
   app.use('/api/users', userRoutes);
   
-  // As rotas legadas de client-products foram injetadas no clientRoutes
   app.use('/api', clientRoutes); 
 
   // --- Configuração do Vite (Frontend) ---

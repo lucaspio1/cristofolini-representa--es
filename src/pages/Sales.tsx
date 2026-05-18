@@ -388,14 +388,23 @@ const calculateInstallments = (data: typeof formData) => {
                     <div className="font-bold text-zinc-900 dark:text-white">{sale.cliente}</div>
                     <div className="text-xs text-zinc-500">{sale.produto}</div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">OP: {sale.op_producao}</td>
-                  <td className="px-6 py-4 text-xs text-zinc-500">{formatDate(sale.data_emissao_pedido)}</td>
+                  <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+  OP: {sale.op_producao}<br/>
+  <span className="text-xs text-zinc-500 font-medium">NF: {sale.numero_nf || '-'}</span>
+</td>
+                  <td className="px-6 py-4 text-xs text-zinc-500">
+  Emissão: {formatDate(sale.data_emissao_pedido)}<br/>
+  Prod: {formatDate(sale.data_finalizacao_produto)}
+</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${getSaleStatus(sale).color}`}>
                       {getSaleStatus(sale).label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right font-bold dark:text-white">{formatCurrency(sale.valor_total_nf)}</td>
+                  <td className="px-6 py-4 text-right">
+  <div className="font-bold dark:text-white">{formatCurrency(sale.valor_total_nf)}</div>
+  <div className="text-xs text-zinc-500">{sale.peso_finalizado || 0}kg / {sale.qtd_sacos_finalizado || 0} sc</div>
+</td>
                   <td className="px-6 py-4 text-xs">
                     <button type="button" onClick={() => handleEditClick(sale)} className="p-2 text-indigo-400 hover:text-indigo-500"><Edit2 className="w-4 h-4" /></button>
                     <button type="button" onClick={() => handleDeleteSale(sale.id)} className="p-2 text-red-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
