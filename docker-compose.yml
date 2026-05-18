@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: cristofolini-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=j|jSP!r4B`:0O34+&+/
+      - DB_NAME=cristofolini_db
+      - JWT_SECRET=cristofolini-secret-key-2026-producao
+      - NODE_ENV=production
+
+  db:
+    image: mysql:8
+    container_name: cristofolini-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=j|jSP!r4B`:0O34+&+/
+      - MYSQL_DATABASE=cristofolini_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

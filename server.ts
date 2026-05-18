@@ -15,6 +15,7 @@ import clientRoutes from './server/routes/clientRoutes';
 import productLineRoutes from './server/routes/productLineRoutes';
 import salesRoutes from './server/routes/salesRoutes';
 import installmentRoutes from './server/routes/installmentRoutes';
+import userRoutes from './server/routes/userRoutes';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,9 +45,9 @@ async function startServer() {
 
       const validPassword = bcrypt.compareSync(password, user.password);
       if (!validPassword) return res.status(401).json({ error: 'Senha incorreta' });
-
-      const token = jwt.sign({ id: user.id, username: user.username, name: user.name }, JWT_SECRET, { expiresIn: '24h' });
-      res.json({ token, user: { id: user.id, username: user.username, name: user.name } });
+      const mustChange = Boolean(user.must_change_password);
+      const token = jwt.sign({ id: user.id, username: user.username, name: user.name, role: user.role, must_change_password: mustChange }, JWT_SECRET, { expiresIn: '24h' });
+      res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role, must_change_password: mustChange } });
     } catch (error) {
       console.error('Erro no login:', error);
       res.status(500).json({ error: 'Erro ao fazer login' });
@@ -71,6 +72,7 @@ async function startServer() {
   app.use('/api/product-lines', productLineRoutes);
   app.use('/api/sales', salesRoutes);
   app.use('/api/installments', installmentRoutes);
+  app.use('/api/users', userRoutes);
   
   // As rotas legadas de client-products foram injetadas no clientRoutes
   app.use('/api', clientRoutes); 

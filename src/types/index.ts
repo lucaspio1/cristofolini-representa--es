@@ -53,4 +53,4 @@ export interface ClientProduct {
   image_url?: string;
 }
 
-export type Tab = 'dashboard' | 'sales' | 'sales-report' | 'reports' | 'registrations';
+export type Tab = 'dashboard' | 'sales' | 'sales-report' | 'reports' | 'registrations'| 'users'| 'profile';

@@ -7,8 +7,9 @@ dotenv.config();
 // Cria o Pool de Conexões (Padrão Corporativo para alta performance)
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT) || 3306,
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  password: process.env.DB_PASSWORD || 'j|jSP!r4B`:0O34+&+/',
   database: process.env.DB_NAME || 'cristofolini_db',
   waitForConnections: true,
   connectionLimit: 10,
@@ -97,6 +98,32 @@ export const initDB = async () => {
         FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
       )
     `);
+
+// 6. Tabela de Usuários (Agora com a trava de troca de senha)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('ADMIN', 'USER') DEFAULT 'USER',
+        active BOOLEAN DEFAULT TRUE,
+        must_change_password BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Criar usuário Admin padrão (Ele não precisará mudar a senha no 1º login)
+    const [users]: any = await connection.query('SELECT id FROM users LIMIT 1');
+    if (users.length === 0) {
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await connection.query(
+        'INSERT INTO users (name, username, password, role, active, must_change_password) VALUES (?, ?, ?, ?, ?, ?)',
+        ['Administrador', 'admin', hashedPassword, 'ADMIN', true, false]
+      );
+      console.log('👤 Usuário Admin padrão criado (Login: admin / Senha: admin123)');
+    }
 
     console.log('✅ Conexão com MySQL estabelecida com sucesso!');
     connection.release();

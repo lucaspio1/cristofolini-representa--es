@@ -74,7 +74,7 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     }
   };
 
-  const calculateInstallments = (data: typeof formData) => {
+const calculateInstallments = (data: typeof formData) => {
     if (data.payment_method !== 'A PRAZO' || !data.valor_total_nf || !data.data_faturamento || !data.installment_config) {
       setPreviewInstallments([]);
       return;
@@ -84,13 +84,27 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     if (intervals.length === 0) { setPreviewInstallments([]); return; }
 
     const baseDate = new Date(data.data_faturamento);
-    const valuePerInstallment = total / intervals.length;
+    
+    // 1. Calcula o valor base arredondado rigidamente para 2 casas decimais
+    const baseValue = Math.round((total / intervals.length) * 100) / 100;
+    
+    // 2. Calcula a diferença exata (os centavos que faltaram ou sobraram)
+    const diff = Math.round((total - (baseValue * intervals.length)) * 100) / 100;
 
     const installments: Installment[] = intervals.map((days, index) => {
       const dueDate = new Date(baseDate);
       dueDate.setDate(dueDate.getDate() + days);
-      return { installment_number: index + 1, due_date: dueDate.toISOString().split('T')[0], value: valuePerInstallment };
+      
+      // 3. Adiciona a diferença apenas na primeira parcela (index === 0)
+      const finalValue = index === 0 ? Math.round((baseValue + diff) * 100) / 100 : baseValue;
+
+      return { 
+        installment_number: index + 1, 
+        due_date: dueDate.toISOString().split('T')[0], 
+        value: finalValue 
+      };
     });
+    
     setPreviewInstallments(installments);
   };
 

@@ -115,7 +115,7 @@ export const Reports: React.FC<ReportsProps> = ({ allInstallments, setAllInstall
             </div>
             <div className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-2">Valor Total</div>
             <div className="text-5xl font-black text-indigo-600 tracking-tighter leading-none">
-              {formatCurrency(filteredInstallments.reduce((acc, i) => acc + i.value, 0))}
+              {formatCurrency(filteredInstallments.reduce((acc, i) => acc + (Number(i.value) || 0), 0))}
             </div>
           </div>
         </motion.div>
@@ -129,7 +129,7 @@ export const Reports: React.FC<ReportsProps> = ({ allInstallments, setAllInstall
             </div>
             <div className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em] mb-2">Total Comissão</div>
             <div className="text-5xl font-black text-emerald-600 tracking-tighter leading-none">
-              {formatCurrency(filteredInstallments.reduce((acc, i) => acc + (i.value * ((i.comissao_percentage || 0) / 100)), 0))}
+              {formatCurrency(filteredInstallments.reduce((acc, i) => acc + ((Number(i.value) || 0) * ((Number(i.comissao_percentage) || 0) / 100)), 0))}
             </div>
           </div>
         </motion.div>
@@ -211,8 +211,8 @@ export const Reports: React.FC<ReportsProps> = ({ allInstallments, setAllInstall
                   <td className="px-8 py-5"><div className="text-xs font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-lg w-fit">{inst.numero_nf || '-'}</div></td>
                   <td className="px-8 py-5"><div className="text-xs font-bold text-zinc-400">#{inst.installment_number}</div></td>
                   <td className="px-8 py-5"><div className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-zinc-300" />{formatDate(inst.due_date)}</div></td>
-                  <td className="px-8 py-5"><div className="font-black text-zinc-900 dark:text-white">{formatCurrency(inst.value)}</div></td>
-                  <td className="px-8 py-5"><div className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg w-fit">{formatCurrency(inst.value * ((inst.comissao_percentage || 0) / 100))}</div></td>
+                  <td className="px-8 py-5"><div className="font-black text-zinc-900 dark:text-white">{formatCurrency(Number(inst.value) || 0)}</div></td>
+                  <td className="px-8 py-5"><div className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg w-fit">{formatCurrency((Number(inst.value) || 0) * ((Number(inst.comissao_percentage) || 0) / 100))}</div></td>
                   <td className="px-8 py-5"><span className={`px-3 py-1 rounded-xl text-[10px] font-black border tracking-widest ${getInstallmentStatus(inst).color}`}>{getInstallmentStatus(inst).label}</span></td>
                   <td className="px-8 py-5">
                     <input 
