@@ -354,6 +354,15 @@ export const Registrations: React.FC<RegistrationsProps> = ({ clients, setClient
                     
                     <form onSubmit={handleAddClientProduct} className="flex gap-2 mb-6">
                       <input type="text" required value={newProductName} onChange={e => setNewProductName(e.target.value)} placeholder="Nome do novo produto..." className="flex-1 px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-indigo-500" />
+                      <div className="space-y-1">
+                         <label className="text-xs font-bold text-zinc-500 uppercase">Imagem do Produto</label>
+                             <input 
+                             type="file" 
+                              accept="image/*" 
+                                  onChange={(e) => setProductFile(e.target.files ? e.target.files[0] : null)}
+                                    className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100"
+                                        />
+                                  </div>
                       <button type="submit" className="px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold rounded-xl hover:scale-105 transition-transform"><Plus className="w-5 h-5" /></button>
                     </form>
                     

@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
 
 // Importando middlewares e banco de dados (Agora chamamos de 'pool' por causa do MySQL)
 import pool, { initDB } from './server/database/db';
@@ -16,6 +17,7 @@ import productLineRoutes from './server/routes/productLineRoutes';
 import salesRoutes from './server/routes/salesRoutes';
 import installmentRoutes from './server/routes/installmentRoutes';
 import userRoutes from './server/routes/userRoutes';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +33,19 @@ async function startServer() {
   await initDB();
 
   // Servir pasta de uploads de forma estática
-  app.use('/uploads', express.static(uploadsDir));
+ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+  const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/uploads/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+export const upload = multer({ storage: storage });
 
   // --- Rotas de Autenticação ---
   app.post('/api/login', async (req, res) => {

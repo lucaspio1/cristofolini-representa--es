@@ -17,9 +17,22 @@ export const createProductLine = async (req: Request, res: Response) => {
     const [result]: any = await pool.query('INSERT INTO product_lines (name) VALUES (?)', [name]);
     const [newLine] = await pool.query('SELECT * FROM product_lines WHERE id = ?', [result.insertId]);
     res.json((newLine as any)[0]);
-  } catch (error) {
+  } 
+  catch (error) {
     res.status(500).json({ error: 'Failed to create product line' });
   }
+const imageName = req.file ? req.file.filename : null;
+
+  try {
+    const [result]: any = await pool.query(
+      'INSERT INTO product_lines (name, image) VALUES (?, ?)',
+      [name, imageName]
+    );
+    res.json({ id: result.insertId, name, image: imageName });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao cadastrar' });
+  }
+
 };
 
 export const updateProductLine = async (req: Request, res: Response) => {
