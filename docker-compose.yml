@@ -7,7 +7,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       - DB_HOST=db
       - DB_PORT=3306
@@ -32,6 +33,11 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=j|jSP!r4B`:0O34+&+/
       - MYSQL_DATABASE=cristofolini_db
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
     volumes:
       - mysql_data:/var/lib/mysql
 

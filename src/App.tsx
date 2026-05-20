@@ -232,8 +232,7 @@ export default function App() {
         )}
         {activeTab === 'dashboard' && <Dashboard sales={sales} clients={clients} allInstallments={allInstallments} />}
         {activeTab === 'sales' && <Sales sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
-        {activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} productLines={productLines} setAllInstallments={setAllInstallments} />}
-        {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
+{activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}        {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
         {activeTab === 'registrations' && <Registrations clients={clients} setClients={setClients} productLines={productLines} setProductLines={setProductLines} />}
         {activeTab === 'users' && currentUser?.role === 'ADMIN' && <UsersPage currentUser={currentUser} />}
         {activeTab === 'profile' && <Profile currentUser={currentUser} onPasswordChanged={() => {}} />}

@@ -32,6 +32,12 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => dateString ? new Date(dateString).toLocaleDateString('pt-BR') : '-';
 
+  // Corta a parte da hora gerada pelo MySQL para o input HTML aceitar a data
+  const formatDateForInput = (dateString?: string | null) => {
+    if (!dateString) return '';
+    return dateString.includes('T') ? dateString.split('T')[0] : dateString;
+  };
+
   const getSaleStatus = (sale: Sale) => {
     if (sale.numero_nf && sale.numero_nf.trim() !== '') return { label: 'CUMPRIDO', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
     if (!sale.data_finalizacao_produto) return { label: 'PENDENTE', color: 'bg-zinc-50 text-zinc-600 border-zinc-200' };
@@ -74,7 +80,7 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     }
   };
 
-const calculateInstallments = (data: typeof formData) => {
+  const calculateInstallments = (data: typeof formData) => {
     if (data.payment_method !== 'A PRAZO' || !data.valor_total_nf || !data.data_faturamento || !data.installment_config) {
       setPreviewInstallments([]);
       return;
@@ -166,14 +172,30 @@ const calculateInstallments = (data: typeof formData) => {
 
   const handleEditClick = async (sale: Sale) => {
     setEditingSaleId(sale.id);
+    
+    // Usando formatDateForInput para formatar corretamente as datas do banco para o HTML
     setFormData({
-      cliente: sale.cliente || '', cotacao: sale.cotacao || '', op_producao: sale.op_producao || '', data_emissao_pedido: sale.data_emissao_pedido || '',
-      op_referencia: sale.op_referencia || '', produto: sale.produto || '', peso_solicitado: sale.peso_solicitado?.toString() || '',
-      qtd_sacos_solicitado: sale.qtd_sacos_solicitado?.toString() || '', linha_produto: sale.linha_produto || '', data_finalizacao_produto: sale.data_finalizacao_produto || '',
-      data_entrega_cliente: sale.data_entrega_cliente || '', ordem_compra: sale.ordem_compra || '', comissao_percentage: sale.comissao_percentage?.toString() || '',
-      numero_nf: sale.numero_nf || '', peso_finalizado: sale.peso_finalizado?.toString() || '', qtd_sacos_finalizado: sale.qtd_sacos_finalizado?.toString() || '',
-      data_faturamento: sale.data_faturamento || '', valor_total_nf: sale.valor_total_nf?.toString() || '', fator_kilo: sale.fator_kilo?.toString() || '',
-      payment_method: sale.payment_method || 'À VISTA', installment_config: '30,60,90'
+      cliente: sale.cliente || '', 
+      cotacao: sale.cotacao || '', 
+      op_producao: sale.op_producao || '', 
+      data_emissao_pedido: formatDateForInput(sale.data_emissao_pedido),
+      op_referencia: sale.op_referencia || '', 
+      produto: sale.produto || '', 
+      peso_solicitado: sale.peso_solicitado?.toString() || '',
+      qtd_sacos_solicitado: sale.qtd_sacos_solicitado?.toString() || '', 
+      linha_produto: sale.linha_produto || '', 
+      data_finalizacao_produto: formatDateForInput(sale.data_finalizacao_produto),
+      data_entrega_cliente: formatDateForInput(sale.data_entrega_cliente), 
+      ordem_compra: sale.ordem_compra || '', 
+      comissao_percentage: sale.comissao_percentage?.toString() || '',
+      numero_nf: sale.numero_nf || '', 
+      peso_finalizado: sale.peso_finalizado?.toString() || '', 
+      qtd_sacos_finalizado: sale.qtd_sacos_finalizado?.toString() || '',
+      data_faturamento: formatDateForInput(sale.data_faturamento), 
+      valor_total_nf: sale.valor_total_nf?.toString() || '', 
+      fator_kilo: sale.fator_kilo?.toString() || '',
+      payment_method: sale.payment_method || 'À VISTA', 
+      installment_config: '30,60,90'
     });
 
     try {
@@ -389,22 +411,22 @@ const calculateInstallments = (data: typeof formData) => {
                     <div className="text-xs text-zinc-500">{sale.produto}</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
-  OP: {sale.op_producao}<br/>
-  <span className="text-xs text-zinc-500 font-medium">NF: {sale.numero_nf || '-'}</span>
-</td>
+                    OP: {sale.op_producao}<br/>
+                    <span className="text-xs text-zinc-500 font-medium">NF: {sale.numero_nf || '-'}</span>
+                  </td>
                   <td className="px-6 py-4 text-xs text-zinc-500">
-  Emissão: {formatDate(sale.data_emissao_pedido)}<br/>
-  Prod: {formatDate(sale.data_finalizacao_produto)}
-</td>
+                    Emissão: {formatDate(sale.data_emissao_pedido)}<br/>
+                    Prod: {formatDate(sale.data_finalizacao_produto)}
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${getSaleStatus(sale).color}`}>
                       {getSaleStatus(sale).label}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-  <div className="font-bold dark:text-white">{formatCurrency(sale.valor_total_nf)}</div>
-  <div className="text-xs text-zinc-500">{sale.peso_finalizado || 0}kg / {sale.qtd_sacos_finalizado || 0} sc</div>
-</td>
+                    <div className="font-bold dark:text-white">{formatCurrency(sale.valor_total_nf)}</div>
+                    <div className="text-xs text-zinc-500">{sale.peso_finalizado || 0}kg / {sale.qtd_sacos_finalizado || 0} sc</div>
+                  </td>
                   <td className="px-6 py-4 text-xs">
                     <button type="button" onClick={() => handleEditClick(sale)} className="p-2 text-indigo-400 hover:text-indigo-500"><Edit2 className="w-4 h-4" /></button>
                     <button type="button" onClick={() => handleDeleteSale(sale.id)} className="p-2 text-red-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
