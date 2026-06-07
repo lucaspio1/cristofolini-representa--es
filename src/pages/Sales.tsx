@@ -1,9 +1,105 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Plus, Edit2, Trash2, History, ChevronRight, Check, ZoomIn, AlertCircle, Calendar 
+  Plus, Edit2, Trash2, History, ChevronRight, Check, ZoomIn, AlertCircle, Calendar, Search, ChevronDown 
 } from 'lucide-react';
 import { Sale, Entity, ClientProduct, Installment } from '../types';
+
+// Componente Customizado para Select com Pesquisa (Dropdown)
+const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder, 
+  disabled = false,
+  name
+}: { 
+  options: { value: string; label: string }[]; 
+  value: string; 
+  onChange: (name: string, value: string) => void; 
+  placeholder: string; 
+  disabled?: boolean;
+  name: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = options.filter(option => 
+    option.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const selectedOption = options.find(opt => opt.value === value);
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <div 
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus-within:ring-2 focus-within:ring-indigo-500 outline-none transition-colors cursor-pointer flex justify-between items-center ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
+        <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-[100] w-full mt-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl max-h-64 flex flex-col overflow-hidden"
+          >
+            <div className="p-2 border-b border-zinc-100 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50">
+              <div className="relative">
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg outline-none text-zinc-900 dark:text-white focus:border-indigo-500 transition-colors"
+                  placeholder="Pesquisar..."
+                />
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 custom-scrollbar">
+              {filteredOptions.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-zinc-500 text-center flex flex-col items-center gap-2">
+                  <Search className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
+                  Nenhum resultado encontrado
+                </div>
+              ) : (
+                filteredOptions.map(option => (
+                  <div
+                    key={option.value}
+                    onClick={() => {
+                      onChange(name, option.value);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`px-4 py-3 text-sm cursor-pointer transition-colors ${value === option.value ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'}`}
+                  >
+                    {option.label}
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 interface SalesProps {
   sales: Sale[];
@@ -29,7 +125,6 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
   const [previewInstallments, setPreviewInstallments] = useState<Installment[]>([]);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   
-  // Estados adicionados para a expansão de parcelas no histórico
   const [expandedSaleId, setExpandedSaleId] = useState<number | null>(null);
   const [saleInstallments, setSaleInstallments] = useState<Record<number, Installment[]>>({});
 
@@ -109,7 +204,7 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     }
   };
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement> | { target: { name: string, value: string } }) => {
     const { name, value } = e.target;
     const newFormData = { ...formData, [name]: value };
     setFormData(newFormData);
@@ -295,34 +390,43 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Cliente *</label>
-              <select name="cliente" required value={formData.cliente} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-colors">
-                <option value="">Selecione um cliente</option>
-                {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
+              <SearchableSelect 
+                name="cliente"
+                options={clients.map(c => ({ value: c.name, label: c.name }))}
+                value={formData.cliente}
+                onChange={(name, value) => handleInputChange({ target: { name, value } })}
+                placeholder="Selecione um cliente"
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Cotação *</label>
-              <input type="text" name="cotacao" required value={formData.cotacao} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="text" name="cotacao" required value={formData.cotacao} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">OP Produção *</label>
-              <input type="text" name="op_producao" required value={formData.op_producao} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="text" name="op_producao" required value={formData.op_producao} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Data Emissão *</label>
-              <input type="date" name="data_emissao_pedido" required value={formData.data_emissao_pedido} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="date" name="data_emissao_pedido" required value={formData.data_emissao_pedido} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">OP Referência</label>
-              <input type="text" name="op_referencia" value={formData.op_referencia} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="text" name="op_referencia" value={formData.op_referencia} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">Produto *</label>
               <div className="flex gap-2 items-center">
-                <select name="produto" required disabled={!formData.cliente} value={formData.produto} onChange={handleInputChange} className="flex-1 px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50">
-                  <option value="">{formData.cliente ? 'Selecione um produto' : 'Selecione um cliente primeiro'}</option>
-                  {saleClientProducts.map(p => <option key={p.id} value={p.product_name}>{p.product_name}</option>)}
-                </select>
+                <div className="flex-1">
+                  <SearchableSelect 
+                    name="produto"
+                    options={saleClientProducts.map(p => ({ value: p.product_name, label: p.product_name }))}
+                    value={formData.produto}
+                    onChange={(name, value) => handleInputChange({ target: { name, value } })}
+                    placeholder={formData.cliente ? 'Selecione um produto' : 'Selecione o cliente...'}
+                    disabled={!formData.cliente}
+                  />
+                </div>
                 {formData.produto && saleClientProducts.find(p => p.product_name === formData.produto)?.image_url && (
                   <div onClick={() => setViewingImage(saleClientProducts.find(p => p.product_name === formData.produto)?.image_url || null)} className="w-10 h-10 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden bg-white flex-shrink-0 cursor-zoom-in relative group/img">
                     <img src={saleClientProducts.find(p => p.product_name === formData.produto)?.image_url} className="w-full h-full object-cover transition-transform group-hover/img:scale-110" />
@@ -335,54 +439,57 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Peso (kg) *</label>
-              <input type="number" name="peso_solicitado" required value={formData.peso_solicitado} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="number" name="peso_solicitado" required value={formData.peso_solicitado} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Qtd Sacos</label>
-              <input type="number" name="qtd_sacos_solicitado" value={formData.qtd_sacos_solicitado} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
+              <input type="number" name="qtd_sacos_solicitado" value={formData.qtd_sacos_solicitado} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Linha Produto *</label>
-              <select name="linha_produto" required value={formData.linha_produto} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
-                <option value="">Selecione uma linha</option>
-                {productLines.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-              </select>
+                 <SearchableSelect 
+                  name="linha_produto"
+                  options={productLines.map(l => ({ value: l.name, label: l.name }))}
+                  value={formData.linha_produto}
+                  onChange={(name, value) => handleInputChange({ target: { name, value } } as any)}
+                  placeholder="Selecione uma linha"
+  />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Data Final. Prod. *</label>
-              <input type="date" name="data_finalizacao_produto" required value={formData.data_finalizacao_produto} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="date" name="data_finalizacao_produto" required value={formData.data_finalizacao_produto} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Data Entrega *</label>
-              <input type="date" name="data_entrega_cliente" required value={formData.data_entrega_cliente} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="date" name="data_entrega_cliente" required value={formData.data_entrega_cliente} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Ordem Compra</label>
-              <input type="text" name="ordem_compra" value={formData.ordem_compra} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="text" name="ordem_compra" value={formData.ordem_compra} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Comissão (%)</label>
-              <input type="number" step="0.1" name="comissao_percentage" value={formData.comissao_percentage} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="number" step="0.1" name="comissao_percentage" value={formData.comissao_percentage} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Número NF</label>
-              <input type="text" name="numero_nf" value={formData.numero_nf} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="text" name="numero_nf" value={formData.numero_nf} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Peso Finalizado</label>
-              <input type="number" step="0.1" name="peso_finalizado" value={formData.peso_finalizado} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="number" step="0.1" name="peso_finalizado" value={formData.peso_finalizado} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Sacos Finalizado</label>
-              <input type="number" name="qtd_sacos_finalizado" value={formData.qtd_sacos_finalizado} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="number" name="qtd_sacos_finalizado" value={formData.qtd_sacos_finalizado} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Data Faturamento</label>
-              <input type="date" name="data_faturamento" value={formData.data_faturamento} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="date" name="data_faturamento" value={formData.data_faturamento} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Valor Total NF</label>
-              <input type="number" step="0.01" name="valor_total_nf" value={formData.valor_total_nf} onChange={handleInputChange} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+              <input type="number" step="0.01" name="valor_total_nf" value={formData.valor_total_nf} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Comissão Prev.</label>
@@ -405,7 +512,7 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
                 <div className="space-y-4">
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Intervalos (ex: 30,60,90)</label>
-                    <input type="text" name="installment_config" value={formData.installment_config} onChange={handleInputChange} className="w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
+                    <input type="text" name="installment_config" value={formData.installment_config} onChange={handleInputChange as any} className="w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-xl outline-none" />
                   </div>
                   {previewInstallments.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -575,7 +682,6 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
                         </div>
                       </td>
                     </motion.tr>
-                    {/* Linha das Parcelas (Expansível) */}
                     {expandedSaleId === sale.id && (
                       <motion.tr
                         key={`installments-${sale.id}`}
