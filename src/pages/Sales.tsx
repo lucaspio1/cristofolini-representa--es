@@ -79,19 +79,24 @@ const SearchableSelect = ({
                   Nenhum resultado encontrado
                 </div>
               ) : (
-                filteredOptions.map(option => (
-                  <div
-                    key={option.value}
-                    onClick={() => {
-                      onChange(name, option.value);
-                      setIsOpen(false);
-                      setSearchTerm('');
-                    }}
-                    className={`px-4 py-3 text-sm cursor-pointer transition-colors ${value === option.value ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold' : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'}`}
-                  >
-                    {option.label}
-                  </div>
-                ))
+filteredOptions.map((option, index) => (
+  <div
+    // Adicionamos o index aqui para garantir unicidade, e o trim() para limpar espaços extras
+    key={`${option.value.trim()}-${index}`}
+    onClick={() => {
+      onChange(name, option.value);
+      setIsOpen(false);
+      setSearchTerm('');
+    }}
+    className={`px-4 py-3 text-sm cursor-pointer transition-colors ${
+      value === option.value 
+        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 font-bold' 
+        : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+    }`}
+  >
+    {option.label}
+  </div>
+))
               )}
             </div>
           </motion.div>
