@@ -148,7 +148,9 @@ export const SalesReport: React.FC<SalesReportProps> = ({ sales, setSales, clien
     const intervals = data.installment_config.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
     if (intervals.length === 0) { setPreviewInstallments([]); return; }
 
-    const baseDate = new Date(data.data_faturamento);
+    // Quebra a string "YYYY-MM-DD" em partes para garantir o horário local
+    const [y, m, d] = data.data_faturamento.split('-').map(Number);
+    const baseDate = new Date(y, m - 1, d);
     const baseValue = Math.round((total / intervals.length) * 100) / 100;
     const diff = Math.round((total - (baseValue * intervals.length)) * 100) / 100;
 

@@ -351,7 +351,9 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
         const data = await res.json();
         setPreviewInstallments(data);
         if (data.length > 0 && sale.data_faturamento) {
-          const baseDate = new Date(sale.data_faturamento);
+          // Quebra a string "YYYY-MM-DD" em partes para garantir o horário local
+        const [y, m, d] = data.data_faturamento.split('-').map(Number);
+        const baseDate = new Date(y, m - 1, d);
           const intervals = data.map((inst: Installment) => Math.round((new Date(inst.due_date).getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24)));
           setFormData(prev => ({ ...prev, installment_config: intervals.join(',') }));
         }
