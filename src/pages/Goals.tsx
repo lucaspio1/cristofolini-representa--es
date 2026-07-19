@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Target, DollarSign, TrendingUp, Calendar, Check, RefreshCw, Award } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Target, DollarSign, TrendingUp, Calendar, Check, X, Edit2, ShieldAlert } from 'lucide-react';
 import { Sale } from '../types';
 
 interface Goal {
@@ -12,7 +12,8 @@ interface Goal {
 }
 
 interface GoalsProps {
-  sales: Sale[]; // Agora a página recebe as vendas para calcular o realizado!
+  sales: Sale[];
+  currentUser: any; // Recebemos o utilizador atual para validar as permissões
 }
 
 const MONTHS = [
@@ -20,11 +21,14 @@ const MONTHS = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-export const Goals: React.FC<GoalsProps> = ({ sales }) => {
+export const Goals: React.FC<GoalsProps> = ({ sales, currentUser }) => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [loading, setLoading] = useState<boolean>(false);
-  const [savingMonth, setSavingMonth] = useState<number | null>(null);
+  
+  // Controlo de Edição
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [monthlyInputs, setMonthlyInputs] = useState<Record<number, { tons: string; revenue: string }>>(
     MONTHS.reduce((acc, _, index) => ({ ...acc, [index + 1]: { tons: '', revenue: '' } }), {})
@@ -61,6 +65,7 @@ export const Goals: React.FC<GoalsProps> = ({ sales }) => {
 
   useEffect(() => {
     fetchGoals();
+    setIsEditing(false); // Sai do modo de edição se trocar de ano
   }, [selectedYear]);
 
   const handleInputChange = (month: number, field: 'tons' | 'revenue', value: string) => {
@@ -69,32 +74,36 @@ export const Goals: React.FC<GoalsProps> = ({ sales }) => {
     }));
   };
 
-  const handleSaveGoal = async (month: number) => {
-    setSavingMonth(month);
-    const inputs = monthlyInputs[month];
+  // Salva todas as metas de uma só vez
+  const handleSaveAllGoals = async () => {
+    setIsSaving(true);
     try {
-      const response = await fetch('/api/goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: selectedYear, month: month,
-          goal_tons: parseFloat(inputs.tons) || 0,
-          goal_revenue: parseFloat(inputs.revenue) || 0
-        })
+      const promises = MONTHS.map((_, index) => {
+        const monthNum = index + 1;
+        const inputs = monthlyInputs[monthNum];
+        return fetch('/api/goals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            year: selectedYear, month: monthNum,
+            goal_tons: parseFloat(inputs.tons) || 0,
+            goal_revenue: parseFloat(inputs.revenue) || 0
+          })
+        });
       });
-      if (!response.ok) throw new Error('Falha ao salvar meta');
+
+      await Promise.all(promises);
       await fetchGoals();
+      setIsEditing(false); // Sai do modo de edição após salvar com sucesso
     } catch (err) {
-      alert('Erro ao salvar a meta do mês');
+      alert('Erro ao guardar as metas. Tente novamente.');
     } finally {
-      setSavingMonth(null);
+      setIsSaving(false);
     }
   };
 
-  // Função que cruza as Vendas com o Mês atual para ver se bateu a meta (Igual ao monolítico)
   const getMonthRealized = (month: number) => {
     return sales.reduce((acc, sale) => {
-      // Usa a data de faturamento, finalização ou emissão como referência
       const dateString = sale.data_faturamento || sale.data_finalizacao_produto || sale.data_emissao_pedido || sale.sale_date;
       if (!dateString) return acc;
 
@@ -117,29 +126,64 @@ export const Goals: React.FC<GoalsProps> = ({ sales }) => {
     }, { weight: 0, revenue: 0 });
   };
 
+  // Regra de Cores para as Percentagens (Idêntico ao monolítico)
+  const getProgressColor = (progress: number) => {
+    if (progress >= 100) return 'text-emerald-600 dark:text-emerald-400 font-bold';
+    if (progress >= 80) return 'text-amber-600 dark:text-amber-400 font-bold';
+    if (progress > 0) return 'text-red-600 dark:text-red-400 font-bold';
+    return 'text-zinc-400';
+  };
+
   const totalAnnualTons = Object.values(monthlyInputs).reduce((acc, curr) => acc + (parseFloat(curr.tons) || 0), 0);
   const totalAnnualRevenue = Object.values(monthlyInputs).reduce((acc, curr) => acc + (parseFloat(curr.revenue) || 0), 0);
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Cabeçalho */}
       <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl"><Target className="w-6 h-6 text-indigo-600 dark:text-indigo-400" /></div>
           <div>
-            <h2 className="text-xl font-black text-zinc-900 dark:text-white">Metas Comerciais & Progresso</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Acompanhe as metas contra o que já foi faturado</p>
+            <h2 className="text-xl font-black text-zinc-900 dark:text-white">Metas Comerciais</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Acompanhamento de volume e faturamento</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-zinc-400" />
-          <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-colors">
-            {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(y => <option key={y} value={y}>Ano: {y}</option>)}
-          </select>
+        
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700">
+            <Calendar className="w-4 h-4 text-zinc-400 ml-2" />
+            <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="px-2 py-1.5 bg-transparent text-zinc-900 dark:text-white font-bold outline-none cursor-pointer text-sm">
+              {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          {/* Botão de Edição Restrito ao Administrador */}
+          {currentUser?.role === 'ADMIN' ? (
+            !isEditing ? (
+              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-bold rounded-xl hover:opacity-90 transition-opacity text-sm">
+                <Edit2 className="w-4 h-4" /> Editar Metas
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setIsEditing(false); fetchGoals(); }} className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm">
+                  <X className="w-4 h-4" /> Cancelar
+                </button>
+                <button onClick={handleSaveAllGoals} disabled={isSaving} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors text-sm disabled:opacity-50">
+                  {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {isSaving ? 'Salvando...' : 'Salvar Tudo'}
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-400">
+              <ShieldAlert className="w-3.5 h-3.5" /> Modo Leitura
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Cartões de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center justify-between transition-colors">
           <div className="space-y-1">
@@ -157,87 +201,97 @@ export const Goals: React.FC<GoalsProps> = ({ sales }) => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          <AnimatePresence>
-            {MONTHS.map((monthName, index) => {
-              const monthNum = index + 1;
-              const isSaving = savingMonth === monthNum;
-              
-              const goalTons = parseFloat(monthlyInputs[monthNum].tons) || 0;
-              const goalRevenue = parseFloat(monthlyInputs[monthNum].revenue) || 0;
-              const realized = getMonthRealized(monthNum);
-              
-              const weightProgress = goalTons > 0 ? (realized.weight / goalTons) * 100 : 0;
-              const revenueProgress = goalRevenue > 0 ? (realized.revenue / goalRevenue) * 100 : 0;
-              const goalMet = (weightProgress >= 100 && revenueProgress >= 100) && (goalTons > 0);
-
-              return (
-                <motion.div key={monthNum} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between space-y-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all relative">
+      {/* Tabela de Metas (Estilo Monolítico) */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors">
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-zinc-50/50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider">Mês</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">Meta (Kg)</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">Realizado (Kg)</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">% Vol</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">Meta (R$)</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">Realizado (R$)</th>
+                  <th className="px-6 py-4 text-xs font-black text-zinc-500 uppercase tracking-wider text-right">% Fat</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {MONTHS.map((monthName, index) => {
+                  const monthNum = index + 1;
+                  const goalTons = parseFloat(monthlyInputs[monthNum].tons) || 0;
+                  const goalRevenue = parseFloat(monthlyInputs[monthNum].revenue) || 0;
                   
-                  {goalMet && (
-                    <div className="absolute -top-3 -right-3 bg-emerald-500 text-white p-2 rounded-full shadow-lg" title="Meta Batida!">
-                      <Award className="w-5 h-5" />
-                    </div>
-                  )}
+                  const realized = getMonthRealized(monthNum);
+                  const weightProgress = goalTons > 0 ? (realized.weight / goalTons) * 100 : 0;
+                  const revenueProgress = goalRevenue > 0 ? (realized.revenue / goalRevenue) * 100 : 0;
 
-                  <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                    <span className="font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-tight text-sm">{monthName}</span>
-                    <span className="text-[10px] font-bold text-zinc-400">{monthNum.toString().padStart(2, '0')}/{selectedYear}</span>
-                  </div>
+                  return (
+                    <motion.tr 
+                      key={monthNum}
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <td className="px-6 py-3 font-bold text-zinc-900 dark:text-zinc-200 text-sm">
+                        {monthName}
+                      </td>
+                      
+                      {/* Coluna Meta Volume */}
+                      <td className="px-6 py-3 text-right">
+                        {isEditing ? (
+                          <input 
+                            type="number" value={monthlyInputs[monthNum].tons} 
+                            onChange={(e) => handleInputChange(monthNum, 'tons', e.target.value)}
+                            className="w-24 px-2 py-1 text-right bg-white dark:bg-zinc-950 border border-indigo-300 dark:border-indigo-700 rounded-md text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                            {goalTons > 0 ? goalTons.toLocaleString('pt-BR') : '-'}
+                          </span>
+                        )}
+                      </td>
 
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1">Meta de Volume (kg)</label>
-                      <input type="number" value={monthlyInputs[monthNum].tons} onChange={(e) => handleInputChange(monthNum, 'tons', e.target.value)} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1">Meta Faturamento (R$)</label>
-                      <input type="number" value={monthlyInputs[monthNum].revenue} onChange={(e) => handleInputChange(monthNum, 'revenue', e.target.value)} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white text-sm rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium" />
-                    </div>
-                  </div>
+                      <td className="px-6 py-3 text-right text-sm font-bold text-zinc-900 dark:text-zinc-200">
+                        {realized.weight > 0 ? realized.weight.toLocaleString('pt-BR') : '-'}
+                      </td>
 
-                  {/* INDICADORES DE PROGRESSO (O QUE FALTAVA) */}
-                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold mb-1">
-                        <span className="text-zinc-500">Vol. Realizado</span>
-                        <span className={weightProgress >= 100 ? 'text-emerald-500' : 'text-indigo-500'}>
-                          {realized.weight.toLocaleString('pt-BR')} kg ({weightProgress.toFixed(0)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                        <div className={`h-1.5 rounded-full ${weightProgress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(weightProgress, 100)}%` }}></div>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <div className="flex justify-between text-[10px] font-bold mb-1">
-                        <span className="text-zinc-500">Fat. Realizado</span>
-                        <span className={revenueProgress >= 100 ? 'text-emerald-500' : 'text-indigo-500'}>
-                          {formatCurrency(realized.revenue)} ({revenueProgress.toFixed(0)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                        <div className={`h-1.5 rounded-full ${revenueProgress >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(revenueProgress, 100)}%` }}></div>
-                      </div>
-                    </div>
-                  </div>
+                      <td className={`px-6 py-3 text-right text-sm ${getProgressColor(weightProgress)}`}>
+                        {goalTons > 0 ? `${weightProgress.toFixed(1)}%` : '-'}
+                      </td>
 
-                  <div className="pt-2">
-                    <button type="button" onClick={() => handleSaveGoal(monthNum)} disabled={isSaving} className="w-full bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-950 text-white font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2 text-xs transition-all disabled:opacity-50">
-                      {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      {isSaving ? 'Salvando...' : 'Salvar Meta'}
-                    </button>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+                      {/* Coluna Meta Receita */}
+                      <td className="px-6 py-3 text-right">
+                        {isEditing ? (
+                          <input 
+                            type="number" value={monthlyInputs[monthNum].revenue} 
+                            onChange={(e) => handleInputChange(monthNum, 'revenue', e.target.value)}
+                            className="w-32 px-2 py-1 text-right bg-white dark:bg-zinc-950 border border-indigo-300 dark:border-indigo-700 rounded-md text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                            {goalRevenue > 0 ? formatCurrency(goalRevenue) : '-'}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-6 py-3 text-right text-sm font-bold text-zinc-900 dark:text-zinc-200">
+                        {realized.revenue > 0 ? formatCurrency(realized.revenue) : '-'}
+                      </td>
+
+                      <td className={`px-6 py-3 text-right text-sm ${getProgressColor(revenueProgress)}`}>
+                        {goalRevenue > 0 ? `${revenueProgress.toFixed(1)}%` : '-'}
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

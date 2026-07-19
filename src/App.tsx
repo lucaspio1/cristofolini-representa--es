@@ -240,7 +240,7 @@ export default function App() {
         
         {/* Renderização Condicional */}
         {activeTab === 'dashboard' && <Dashboard sales={sales} clients={clients} allInstallments={allInstallments} />}
-       {activeTab === 'metas' && <Goals sales={sales} />}  {/* <-- COMPONENTE DE METAS SENDO RENDERIZADO AQUI */}
+        {activeTab === 'metas' && <Goals sales={sales} currentUser={currentUser} />} {/* <-- COMPONENTE DE METAS SENDO RENDERIZADO AQUI */}
         {activeTab === 'sales' && <Sales sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
         {activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
         {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
