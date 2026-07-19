@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, ShoppingBag, ClipboardList, BarChart3, Settings, 
-  AlertCircle, ChevronLeft, ChevronRight, Users, LogOut, User
+  AlertCircle, ChevronLeft, ChevronRight, Users, LogOut, User, Target // <-- Target adicionado aqui
 } from 'lucide-react';
 import { useTheme } from './lib/ThemeContext';
 import { Sale, Entity, Installment, Tab } from './types';
@@ -22,6 +22,8 @@ import { Registrations } from './pages/Registrations';
 import { Login } from './pages/Login';
 import { Users as UsersPage } from './pages/Users';
 import { Profile } from './pages/Profile';
+import { Goals } from './pages/Goals';
+
 export default function App() {
   const { theme } = useTheme();
   
@@ -29,9 +31,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Estados de Navegação
+  // Estados de Navegação (Para não dar erro no TypeScript, lembre-se de adicionar 'metas' ao type Tab no seu arquivo types.ts)
   const [showHome, setShowHome] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [activeTab, setActiveTab] = useState<Tab | 'metas'>('dashboard'); // <-- Aceitando 'metas'
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   // Estados de Dados
@@ -152,7 +154,7 @@ export default function App() {
     );
   }
 
-  // Se não estiver travado, continua a renderização normal (O return com o Sidebar e o conteúdo completo vai logo aqui embaixo...)
+  // Se não estiver travado, continua a renderização normal
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col lg:flex-row transition-colors duration-300">
       
@@ -169,6 +171,12 @@ export default function App() {
           <button onClick={() => setActiveTab('dashboard')} title={isCollapsed ? "Dashboard" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <LayoutDashboard className="w-5 h-5 shrink-0" />{!isCollapsed && <span>Dashboard</span>}
           </button>
+          
+          {/* NOVA ABA METAS */}
+          <button onClick={() => setActiveTab('metas')} title={isCollapsed ? "Metas Comerciais" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'metas' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
+            <Target className="w-5 h-5 shrink-0" />{!isCollapsed && <span>Metas Comerciais</span>}
+          </button>
+
           <button onClick={() => setActiveTab('sales')} title={isCollapsed ? "Lançar Venda" : ""} className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 px-4'} py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'sales' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}>
             <ShoppingBag className="w-5 h-5 shrink-0" />{!isCollapsed && <span>Lançar Venda</span>}
           </button>
@@ -202,8 +210,7 @@ export default function App() {
           <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between px-2'}`}>
             <ThemeToggle />
 
-
-            <button onClick={() => setActiveTab('profile')} title="Meu Perfil" className="p-2 text-zinc-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors">
+            <button onClick={() => setActiveTab('profile' as any)} title="Meu Perfil" className="p-2 text-zinc-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors">
               <User className="w-5 h-5" />
             </button>
 
@@ -230,21 +237,32 @@ export default function App() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
            </div>
         )}
+        
+        {/* Renderização Condicional */}
         {activeTab === 'dashboard' && <Dashboard sales={sales} clients={clients} allInstallments={allInstallments} />}
+        {activeTab === 'metas' && <Goals />} {/* <-- COMPONENTE DE METAS SENDO RENDERIZADO AQUI */}
         {activeTab === 'sales' && <Sales sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
-{activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}        {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
+        {activeTab === 'sales-report' && <SalesReport sales={sales} setSales={setSales} clients={clients} productLines={productLines} setAllInstallments={setAllInstallments} />}
+        {activeTab === 'reports' && <Reports allInstallments={allInstallments} setAllInstallments={setAllInstallments} />}
         {activeTab === 'registrations' && <Registrations clients={clients} setClients={setClients} productLines={productLines} setProductLines={setProductLines} />}
         {activeTab === 'users' && currentUser?.role === 'ADMIN' && <UsersPage currentUser={currentUser} />}
         {activeTab === 'profile' && <Profile currentUser={currentUser} onPasswordChanged={() => {}} />}
       </main>
 
-      {/* Navbar Mobile (Adicionado botão Usuários se for admin, escondido em telas menores por falta de espaço, recomendado usar menu hambúrguer no futuro) */}
+      {/* Navbar Mobile */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 z-30 px-2 py-3 flex items-center justify-around overflow-x-auto">
         <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-zinc-400'}`}><LayoutDashboard className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Dash</span></button>
+        
+        {/* BOTÃO MOBILE METAS */}
+        <button onClick={() => setActiveTab('metas')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'metas' ? 'text-indigo-600' : 'text-zinc-400'}`}><Target className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Metas</span></button>
+
         <button onClick={() => setActiveTab('sales')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'sales' ? 'text-indigo-600' : 'text-zinc-400'}`}><ShoppingBag className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Lançar</span></button>
         <button onClick={() => setActiveTab('sales-report')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'sales-report' ? 'text-indigo-600' : 'text-zinc-400'}`}><ClipboardList className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Vendas</span></button>
         <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'reports' ? 'text-indigo-600' : 'text-zinc-400'}`}><BarChart3 className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Financ.</span></button>
+        
+        {/* Se o espaço mobile ficar pequeno, você pode remover ou usar scroll */}
         <button onClick={() => setActiveTab('registrations')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'registrations' ? 'text-indigo-600' : 'text-zinc-400'}`}><Settings className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Cad.</span></button>
+        
         {currentUser?.role === 'ADMIN' && (
            <button onClick={() => setActiveTab('users')} className={`flex flex-col items-center gap-1 min-w-[60px] ${activeTab === 'users' ? 'text-indigo-600' : 'text-zinc-400'}`}><Users className="w-5 h-5" /><span className="text-[9px] font-bold uppercase">Acessos</span></button>
         )}

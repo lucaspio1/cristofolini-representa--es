@@ -16,6 +16,7 @@ import productLineRoutes from './server/routes/productLineRoutes';
 import salesRoutes from './server/routes/salesRoutes';
 import installmentRoutes from './server/routes/installmentRoutes';
 import userRoutes from './server/routes/userRoutes';
+import goalsRoutes from './server/routes/goalsRoutes';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +71,7 @@ async function startServer() {
   app.use('/api/sales', salesRoutes);
   app.use('/api/installments', installmentRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/goals', goalsRoutes);
   
   app.use('/api', clientRoutes); 
 

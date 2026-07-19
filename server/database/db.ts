@@ -113,6 +113,20 @@ export const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+// 7. Tabela de Metas (Goals)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS goals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        year INT NOT NULL,
+        month INT NOT NULL,
+        goal_tons DECIMAL(10,2) NOT NULL DEFAULT 0,
+        goal_revenue DECIMAL(15,2) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_month_year (year, month)
+      )
+    `);
+
+
 
     // Criar usuário Admin padrão (Ele não precisará mudar a senha no 1º login)
     const [users]: any = await connection.query('SELECT id FROM users LIMIT 1');
