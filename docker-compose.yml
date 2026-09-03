@@ -16,14 +16,11 @@ services:
       - DB_PASSWORD=j|jSP!r4B`:0O34+&+/
       - DB_NAME=cristofolini_db
       - JWT_SECRET=cristofolini-secret-key-2026-producao
-      - NODE_ENV=development
+      - NODE_ENV=production        # era "development"
+    restart: unless-stopped        # sobe sozinho se a VM reiniciar
     volumes:
-      # Sincroniza o código local com o contentor (permite o git rastrear o package.json)
-      - .:/app
-      # Protege a pasta node_modules interna do contentor
-      - /app/node_modules
-      # Volume persistente para as imagens carregadas não se perderem ao reiniciar
       - uploads_data:/app/public/uploads
+      
 
   db:
     image: mysql:8
