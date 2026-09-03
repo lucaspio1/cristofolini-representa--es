@@ -318,59 +318,73 @@ export const Sales: React.FC<SalesProps> = ({ sales, setSales, clients, productL
     } catch (err) { alert(err instanceof Error ? err.message : 'Erro ao salvar'); } finally { setIsAdding(false); }
   };
 
-  const handleEditClick = async (sale: Sale) => {
-    setEditingSaleId(sale.id);
-    
-    setFormData({
-      cliente: sale.cliente || '', 
-      cotacao: sale.cotacao || '', 
-      op_producao: sale.op_producao || '', 
-      data_emissao_pedido: formatDateForInput(sale.data_emissao_pedido),
-      op_referencia: sale.op_referencia || '', 
-      produto: sale.produto || '', 
-      peso_solicitado: sale.peso_solicitado?.toString() || '',
-      qtd_sacos_solicitado: sale.qtd_sacos_solicitado?.toString() || '', 
-      linha_produto: sale.linha_produto || '', 
-      data_finalizacao_produto: formatDateForInput(sale.data_finalizacao_produto),
-      data_entrega_cliente: formatDateForInput(sale.data_entrega_cliente), 
-      ordem_compra: sale.ordem_compra || '', 
-      comissao_percentage: sale.comissao_percentage?.toString() || '',
-      numero_nf: sale.numero_nf || '', 
-      peso_finalizado: sale.peso_finalizado?.toString() || '', 
-      qtd_sacos_finalizado: sale.qtd_sacos_finalizado?.toString() || '',
-      data_faturamento: formatDateForInput(sale.data_faturamento), 
-      valor_total_nf: sale.valor_total_nf?.toString() || '', 
-      fator_kilo: sale.fator_kilo?.toString() || '',
-      payment_method: sale.payment_method || 'À VISTA', 
-      installment_config: '30,60,90'
-    });
+const handleEditClick = async (sale: Sale) => {
+  setEditingSaleId(sale.id);
 
-    try {
-      const res = await fetch(`/api/sales/${sale.id}/installments`);
-      if (res.ok) {
-        const data = await res.json();
-        setPreviewInstallments(data);
-        if (data.length > 0 && sale.data_faturamento) {
-          // Quebra a string "YYYY-MM-DD" em partes para garantir o horário local
-        const [y, m, d] = data.data_faturamento.split('-').map(Number);
+  setFormData({
+    cliente: sale.cliente || '',
+    cotacao: sale.cotacao || '',
+    op_producao: sale.op_producao || '',
+    data_emissao_pedido: formatDateForInput(sale.data_emissao_pedido),
+    op_referencia: sale.op_referencia || '',
+    produto: sale.produto || '',
+    peso_solicitado: sale.peso_solicitado?.toString() || '',
+    qtd_sacos_solicitado: sale.qtd_sacos_solicitado?.toString() || '',
+    linha_produto: sale.linha_produto || '',
+    data_finalizacao_produto: formatDateForInput(sale.data_finalizacao_produto),
+    data_entrega_cliente: formatDateForInput(sale.data_entrega_cliente),
+    ordem_compra: sale.ordem_compra || '',
+    comissao_percentage: sale.comissao_percentage?.toString() || '',
+    numero_nf: sale.numero_nf || '',
+    peso_finalizado: sale.peso_finalizado?.toString() || '',
+    qtd_sacos_finalizado: sale.qtd_sacos_finalizado?.toString() || '',
+    data_faturamento: formatDateForInput(sale.data_faturamento),
+    valor_total_nf: sale.valor_total_nf?.toString() || '',
+    fator_kilo: sale.fator_kilo?.toString() || '',
+    payment_method: sale.payment_method || 'À VISTA',
+    installment_config: '30,60,90'
+  });
+
+  try {
+    const res = await fetch(`/api/sales/${sale.id}/installments`);
+    if (res.ok) {
+      const data = await res.json();
+
+      // Normaliza o due_date vindo do banco (pode chegar como
+      // '2026-02-25T00:00:00.000Z') para 'YYYY-MM-DD', evitando que
+      // esse valor "sujo" seja reenviado no próximo save e quebre o INSERT.
+      const normalized = data.map((inst: Installment) => ({
+        ...inst,
+        due_date: inst.due_date && inst.due_date.includes('T')
+          ? inst.due_date.split('T')[0]
+          : inst.due_date,
+      }));
+
+      setPreviewInstallments(normalized);
+
+      if (normalized.length > 0 && sale.data_faturamento) {
+        // Quebra a string "YYYY-MM-DD" em partes para garantir o horário local
+        const [y, m, d] = sale.data_faturamento.split('-').map(Number); // era "data.data_faturamento"
         const baseDate = new Date(y, m - 1, d);
-          const intervals = data.map((inst: Installment) => Math.round((new Date(inst.due_date).getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24)));
-          setFormData(prev => ({ ...prev, installment_config: intervals.join(',') }));
-        }
-      }
-    } catch (err) { console.error(err); }
-
-    if (sale.cliente) {
-      const client = clients.find(c => c.name === sale.cliente);
-      if (client) {
-        try {
-          const res = await fetch(`/api/clients/${client.id}/products`);
-          if (res.ok) setSaleClientProducts(await res.json());
-        } catch (err) { console.error(err); }
+        const intervals = normalized.map((inst: Installment) =>
+          Math.round((new Date(inst.due_date).getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+        );
+        setFormData(prev => ({ ...prev, installment_config: intervals.join(',') }));
       }
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  } catch (err) { console.error(err); }
+
+  if (sale.cliente) {
+    const client = clients.find(c => c.name === sale.cliente);
+    if (client) {
+      try {
+        const res = await fetch(`/api/clients/${client.id}/products`);
+        if (res.ok) setSaleClientProducts(await res.json());
+      } catch (err) { console.error(err); }
+    }
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
   const handleDeleteSale = async (id: number) => {
     if (!confirm('Excluir esta venda?')) return;

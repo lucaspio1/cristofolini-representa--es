@@ -2,7 +2,10 @@ import { Request, Response } from 'express';
 import pool from '../database/db';
 
 // Função auxiliar para transformar textos vazios em NULL para o MySQL não reclamar
-const safeDate = (val: string | undefined | null) => (val && val.trim() !== '') ? val : null;
+const safeDate = (val: string | undefined | null) => {
+  if (!val || val.trim() === '') return null;
+  return val.includes('T') ? val.split('T')[0] : val;
+};
 
 export const getSales = async (req: Request, res: Response) => {
   try {
